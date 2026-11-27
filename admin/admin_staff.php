@@ -13,6 +13,36 @@ $company_id = (int) get_company_id();
 $message = '';
 employee_lifecycle_ready($conn);
 
+/** Payroll v2 per-staff options posted from add/edit forms. */
+function staff_payroll_options_from_post(string $prefix): array
+{
+    $mode = (string) ($_POST[$prefix . 'attendance_mode'] ?? 'self');
+    if (!in_array($mode, ['self', 'auto', 'manual'], true)) {
+        $mode = 'self';
+    }
+    $off = array_values(array_unique(array_filter(array_map('intval', (array) ($_POST[$prefix . 'weekly_off'] ?? [])), static fn ($d) => $d >= 0 && $d <= 6)));
+    sort($off);
+    $inc = max(0, round((float) ($_POST[$prefix . 'rate_increment'] ?? 0), 2));
+
+    return [$mode, implode(',', $off), $inc];
+}
+
+function staff_save_payroll_options(mysqli $conn, int $userId, int $companyId, string $prefix): void
+{
+    if (!db_column_exists($conn, 'users', 'attendance_mode')) {
+        return;
+    }
+    [$mode, $off, $inc] = staff_payroll_options_from_post($prefix);
+    $stmt = $conn->prepare("UPDATE users SET
+            auto_attendance_from = CASE WHEN ? = 'auto' AND (attendance_mode <> 'auto' OR auto_attendance_from IS NULL) THEN CURDATE() ELSE auto_attendance_from END,
+            attendance_mode = ?, weekly_off = ?, rate_increment = ?
+        WHERE id = ? AND company_id = ?");
+    $stmt->bind_param('sssdii', $mode, $mode, $off, $inc, $userId, $companyId);
+    $stmt->execute();
+    $stmt->close();
+    write_audit_log($conn, 'staff.payroll_options', "staff_id={$userId} attendance_mode={$mode} weekly_off={$off} rate_increment={$inc}", 'user', (string) $userId);
+}
+
 // 1. ADD STAFF LOGIC
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_staff'])) {
     // CSRF Verification
@@ -43,6 +73,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_staff'])) {
         
         if ($stmt->execute()) {
             write_audit_log($conn, 'staff.add', "name={$name} salary_type={$salary_type} amount={$salary_amount}", 'user', (string) $stmt->insert_id);
+            $new_staff_id = (int) $stmt->insert_id;
+            staff_save_payroll_options($conn, $new_staff_id, (int) $company_id, '');
+            // New "auto" staff: present automatically from the joining date (not from today)
+            $upd = $conn->prepare("UPDATE users SET auto_attendance_from = LEAST(CURDATE(), join_date) WHERE id = ? AND attendance_mode = 'auto' AND join_date IS NOT NULL");
+            $upd->bind_param('i', $new_staff_id);
+            $upd->execute();
+            $upd->close();
             $message = "<div class='alert alert-success alert-dismissible fade show fw-bold'>New staff added successfully!<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
         } else {
             $message = "<div class='alert alert-danger alert-dismissible fade show fw-bold'>Error: Number already exists or database error.<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
@@ -65,13 +102,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['edit_staff'])) {
     } else {
     $name = $_POST['edit_name'];
     $phone = $_POST['edit_phone'];
-    $password = $_POST['edit_password'];
+    $password = $_POST['edit_password'] ?? '';
     $salary_type = $_POST['edit_salary_type'];
     $salary_amount = $_POST['edit_salary_amount'];
     $join_date = $_POST['edit_join_date'];
     $branch_id = $_POST['edit_branch_id'];
     $shift_start_time = $_POST['edit_shift_start_time'] ?? '09:30:00';
 
+    staff_save_payroll_options($conn, $edit_id, (int) $company_id, 'edit_');
     // If password is being changed, hash it
     if (!empty($password)) {
         // if (!validate_password_complexity($password)) {
@@ -295,6 +333,9 @@ $csrf_token = generate_csrf_token();
                                 <td>
                                     <span class="badge bg-secondary"><?php echo ucfirst($row['salary_type']); ?></span><br>
                                     <span class="text-muted small">Base:</span> ₹<?php echo $row['salary_amount']; ?>
+                                    <?php if ((float) ($row['rate_increment'] ?? 0) > 0): ?><br><span class="badge bg-warning text-dark">+₹<?php echo (float) $row['rate_increment']; ?>/month</span><?php endif; ?>
+                                    <br><span class="badge bg-light text-dark border"><?php echo ['self' => 'Self punch', 'auto' => 'Auto present', 'manual' => 'Manual'][$row['attendance_mode'] ?? 'self'] ?? 'Self punch'; ?></span>
+                                    <span class="badge bg-light text-dark border"><?php echo htmlspecialchars(payroll_weekly_off_label($row)); ?></span>
                                     <?php if (!empty($row['custom_hourly_rate'])): ?>
                                         <br><span class="text-success small fw-bold" title="Custom Rate for this month">This Mth: ₹<?php echo $row['custom_hourly_rate']; ?></span>
                                     <?php endif; ?>
@@ -342,7 +383,10 @@ $csrf_token = generate_csrf_token();
                                         data-staff-amount="<?php echo htmlspecialchars((string) $row['salary_amount'], ENT_QUOTES, 'UTF-8'); ?>"
                                         data-staff-join="<?php echo htmlspecialchars((string) ($row['join_date'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
                                         data-staff-shift="<?php echo htmlspecialchars((string) ($row['shift_start_time'] ?? '09:30:00'), ENT_QUOTES, 'UTF-8'); ?>"
-                                        data-staff-branch="<?php echo (int) $row['branch_id']; ?>">
+                                        data-staff-branch="<?php echo (int) $row['branch_id']; ?>"
+                                        data-staff-mode="<?php echo htmlspecialchars((string) ($row['attendance_mode'] ?? 'self'), ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-staff-off="<?php echo htmlspecialchars((string) ($row['weekly_off'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-staff-inc="<?php echo htmlspecialchars((string) ($row['rate_increment'] ?? '0'), ENT_QUOTES, 'UTF-8'); ?>">
                                         <i class="bi bi-pencil"></i> Edit
                                     </button>
                                     <?php else: ?>
@@ -388,6 +432,20 @@ $csrf_token = generate_csrf_token();
                     <div class="col-6 mb-3"><label class="form-label fw-bold">Type</label><select name="salary_type" class="form-select"><option value="hourly">Hourly</option><option value="monthly">Monthly</option></select></div>
                     <div class="col-6 mb-3"><label class="form-label fw-bold">Base Amount (₹)</label><input type="number" step="0.01" name="salary_amount" class="form-control" required></div>
                 </div>
+
+                <div class="border rounded p-2 mb-3 bg-light">
+                    <div class="fw-bold small mb-1"><i class="bi bi-calendar-week"></i> Attendance &amp; salary rules</div>
+                    <label class="form-label small mb-1">Attendance mode</label>
+                    <select name="attendance_mode" id="a_mode" class="form-select form-select-sm mb-2">
+                        <option value="self">Staff punches (self) — auto absence/late penalty ON</option>
+                        <option value="auto">Automatic present every working day (fixed salary)</option>
+                        <option value="manual">Manual — admin enters attendance, no auto penalty</option>
+                    </select>
+                    <label class="form-label small mb-1">Weekly off (paid for monthly staff, never a penalty)</label>
+                    <div class="mb-2"><div class="form-check form-check-inline"><input class="form-check-input a_wo" type="checkbox" name="weekly_off[]" value="0" id="a_wo0"><label class="form-check-label small" for="a_wo0">Sun</label></div><div class="form-check form-check-inline"><input class="form-check-input a_wo" type="checkbox" name="weekly_off[]" value="1" id="a_wo1"><label class="form-check-label small" for="a_wo1">Mon</label></div><div class="form-check form-check-inline"><input class="form-check-input a_wo" type="checkbox" name="weekly_off[]" value="2" id="a_wo2"><label class="form-check-label small" for="a_wo2">Tue</label></div><div class="form-check form-check-inline"><input class="form-check-input a_wo" type="checkbox" name="weekly_off[]" value="3" id="a_wo3"><label class="form-check-label small" for="a_wo3">Wed</label></div><div class="form-check form-check-inline"><input class="form-check-input a_wo" type="checkbox" name="weekly_off[]" value="4" id="a_wo4"><label class="form-check-label small" for="a_wo4">Thu</label></div><div class="form-check form-check-inline"><input class="form-check-input a_wo" type="checkbox" name="weekly_off[]" value="5" id="a_wo5"><label class="form-check-label small" for="a_wo5">Fri</label></div><div class="form-check form-check-inline"><input class="form-check-input a_wo" type="checkbox" name="weekly_off[]" value="6" id="a_wo6"><label class="form-check-label small" for="a_wo6">Sat</label></div></div>
+                    <label class="form-label small mb-1">Auto increment per month (₹) <span class="text-muted">— 0 = no automatic increase</span></label>
+                    <input type="number" step="0.01" min="0" name="rate_increment" id="a_inc" class="form-control form-control-sm" value="0">
+                </div>
                 <button type="submit" name="add_staff" class="btn btn-primary w-100 fw-bold">Save Staff</button>
             </div>
         </form>
@@ -422,6 +480,20 @@ $csrf_token = generate_csrf_token();
                 <div class="row">
                     <div class="col-6 mb-3"><label class="form-label fw-bold">Type</label><select name="edit_salary_type" id="e_type" class="form-select"><option value="hourly">Hourly</option><option value="monthly">Monthly</option></select></div>
                     <div class="col-6 mb-3"><label class="form-label fw-bold">Base Amount (₹)</label><input type="number" step="0.01" name="edit_salary_amount" id="e_amount" class="form-control" required></div>
+                </div>
+
+                <div class="border rounded p-2 mb-3 bg-light">
+                    <div class="fw-bold small mb-1"><i class="bi bi-calendar-week"></i> Attendance &amp; salary rules</div>
+                    <label class="form-label small mb-1">Attendance mode</label>
+                    <select name="edit_attendance_mode" id="e_mode" class="form-select form-select-sm mb-2">
+                        <option value="self">Staff punches (self) — auto absence/late penalty ON</option>
+                        <option value="auto">Automatic present every working day (fixed salary)</option>
+                        <option value="manual">Manual — admin enters attendance, no auto penalty</option>
+                    </select>
+                    <label class="form-label small mb-1">Weekly off (paid for monthly staff, never a penalty)</label>
+                    <div class="mb-2"><div class="form-check form-check-inline"><input class="form-check-input e_wo" type="checkbox" name="edit_weekly_off[]" value="0" id="e_wo0"><label class="form-check-label small" for="e_wo0">Sun</label></div><div class="form-check form-check-inline"><input class="form-check-input e_wo" type="checkbox" name="edit_weekly_off[]" value="1" id="e_wo1"><label class="form-check-label small" for="e_wo1">Mon</label></div><div class="form-check form-check-inline"><input class="form-check-input e_wo" type="checkbox" name="edit_weekly_off[]" value="2" id="e_wo2"><label class="form-check-label small" for="e_wo2">Tue</label></div><div class="form-check form-check-inline"><input class="form-check-input e_wo" type="checkbox" name="edit_weekly_off[]" value="3" id="e_wo3"><label class="form-check-label small" for="e_wo3">Wed</label></div><div class="form-check form-check-inline"><input class="form-check-input e_wo" type="checkbox" name="edit_weekly_off[]" value="4" id="e_wo4"><label class="form-check-label small" for="e_wo4">Thu</label></div><div class="form-check form-check-inline"><input class="form-check-input e_wo" type="checkbox" name="edit_weekly_off[]" value="5" id="e_wo5"><label class="form-check-label small" for="e_wo5">Fri</label></div><div class="form-check form-check-inline"><input class="form-check-input e_wo" type="checkbox" name="edit_weekly_off[]" value="6" id="e_wo6"><label class="form-check-label small" for="e_wo6">Sat</label></div></div>
+                    <label class="form-label small mb-1">Auto increment per month (₹) <span class="text-muted">— 0 = no automatic increase</span></label>
+                    <input type="number" step="0.01" min="0" name="edit_rate_increment" id="e_inc" class="form-control form-control-sm" value="0">
                 </div>
                 <button type="submit" name="edit_staff" class="btn btn-dark w-100 fw-bold">Update Details</button>
             </div>
@@ -548,6 +620,10 @@ $csrf_token = generate_csrf_token();
             document.getElementById('e_amount').value = this.getAttribute('data-staff-amount') || '';
             document.getElementById('e_join').value = this.getAttribute('data-staff-join') || '';
             document.getElementById('e_shift').value = this.getAttribute('data-staff-shift') || '09:30';
+            document.getElementById('e_mode').value = this.getAttribute('data-staff-mode') || 'self';
+            document.getElementById('e_inc').value = this.getAttribute('data-staff-inc') || '0';
+            var offs = (this.getAttribute('data-staff-off') || '').split(',');
+            document.querySelectorAll('.e_wo').forEach(function (cb) { cb.checked = offs.indexOf(cb.value) !== -1; });
             document.getElementById('e_branch').value = this.getAttribute('data-staff-branch') || '';
             bootstrap.Modal.getOrCreateInstance(document.getElementById('editModal')).show();
         });

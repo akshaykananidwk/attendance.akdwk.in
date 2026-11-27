@@ -27,8 +27,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['pay_salary'])) {
         $stmt->bind_param("iidssss", $u_id, $company_id, $amount, $p_date, $method, $ref, $remarks);
         $stmt->execute();
 
-        // Also record as a "Debit" in advance_payments to clear the balance? 
-        // Actually, let's keep salary_payments separate for clear reporting.
+        // Salary paid must reduce the staff balance — the balance is calculated from Upad/Jama,
+        // so the payment is also written as an Upad entry (unless the admin unticks it).
+        if (!empty($_POST['deduct_balance'])) {
+            $note = 'Salary payment (' . $method . ($ref !== '' ? ' ' . $ref : '') . ')' . ($remarks !== '' ? ' - ' . $remarks : '');
+            $stmt2 = $conn->prepare("INSERT INTO advance_payments (user_id, company_id, amount, date, transaction_type, description) VALUES (?, ?, ?, ?, 'Upad', ?)");
+            if ($stmt2) {
+                $stmt2->bind_param('iidss', $u_id, $company_id, $amount, $p_date, $note);
+                $stmt2->execute();
+                $stmt2->close();
+            }
+        }
         
         $conn->commit();
         $message = "<div class='alert alert-success fw-bold'>Payment of ₹$amount recorded successfully!</div>";
@@ -113,6 +122,7 @@ $payments = $conn->query("SELECT p.*, u.name FROM salary_payments p JOIN users u
                         <label class="form-label fw-bold">Remarks</label>
                         <textarea name="remarks" class="form-control" rows="2"></textarea>
                     </div>
+                    <div class="form-check mb-3"><input class="form-check-input" type="checkbox" name="deduct_balance" value="1" id="dedBal" checked><label class="form-check-label small" for="dedBal">Also deduct from staff balance (adds an Upad entry). Untick only if you already entered this payment as Upad.</label></div>
                     <button type="submit" name="pay_salary" class="btn btn-primary w-100 fw-bold">Record Salary Payment</button>
                 </form>
             </div>

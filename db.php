@@ -307,5 +307,6 @@ $conn->set_charset('utf8mb4');
 require_once __DIR__ . '/includes/attendance_helpers.php';
 require_once __DIR__ . '/includes/employee_lifecycle.php';
 require_once __DIR__ . '/includes/salary_engine.php';
+require_once __DIR__ . '/includes/payroll.php';
 require_once __DIR__ . '/includes/leave_policy.php';
 require_once __DIR__ . '/includes/attendance_automation.php';

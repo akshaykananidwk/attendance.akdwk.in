@@ -163,14 +163,13 @@ $total_office_expense = $monthly_office_rent + $other_office_expense;
                             $grand_total = 0;
                             if ($result && $result->num_rows > 0): 
                                 while($row = $result->fetch_assoc()):
-                                    $final_rate = !empty($row['custom_hourly_rate']) ? $row['custom_hourly_rate'] : $row['salary_amount'];
-                                    
-                                    $gross = ($row['salary_type'] == 'hourly') ? ($row['total_minutes'] / 60) * $final_rate : ($final_rate / 30) * $row['days_present'];
-                                    $gross = salary_apply_penalties($conn, (int) $row['id'], (float) $gross, (string) $row['salary_type'], (float) $final_rate, $selected_month, $selected_year);
-                                    
-                                    $open_bal = calculateOpeningBalance($conn, (int) $row['id'], $selected_month, $selected_year);
-                                    
-                                    $net = $open_bal + $gross + $row['month_jama'] - $row['month_upad'] + $row['subsequent_jama'] - $row['subsequent_upad'];
+                                    $P = payroll_slip($conn, (int) $row['id'], (int) $selected_year, (int) $selected_month);
+                                    $final_rate = $P['rate'];
+                                    $gross = $P['earned_display'];
+                                    $open_bal = $P['opening_balance'];
+                                    $net = $P['net'];
+                                    $row['days_present'] = $P['paid_days'];
+                                    $row['total_minutes'] = $P['minutes'];
                                     $grand_total += $net;
 
                                     $hrs = floor($row['total_minutes'] / 60);

@@ -6,6 +6,7 @@
 require_once __DIR__ . '/../db.php';
 
 date_default_timezone_set('Asia/Kolkata');
+attendance_auto_present($conn, null);
 $result = attendance_process_noon_absence($conn, date('Y-m-d'), null);
 
 if (php_sapi_name() === 'cli') {

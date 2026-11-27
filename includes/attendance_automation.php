@@ -101,7 +101,7 @@ function attendance_apply_auto_absence_penalty(
     string $date,
     string $reason
 ): void {
-    $deduct = ATTENDANCE_AUTO_ABSENCE_PENALTY_DAYS;
+    $deduct = (float) payroll_settings($conn)['penalty_absent_days'];
     $reasonFull = '[Auto absence] ' . $reason;
 
     $stmt = $conn->prepare('SELECT id FROM attendance_logs WHERE user_id = ? AND log_date = ? LIMIT 1');
@@ -137,6 +137,10 @@ function attendance_apply_auto_absence_penalty(
     }
 
     if (function_exists('salary_table_exists') && salary_table_exists($conn, 'staff_penalties')) {
+        $del = $conn->prepare("DELETE FROM staff_penalties WHERE user_id = ? AND penalty_date = ? AND penalty_type = 'late_punch' AND created_by = 0");
+        $del->bind_param('is', $userId, $date);
+        $del->execute();
+        $del->close();
         $chk = $conn->prepare(
             'SELECT id FROM staff_penalties WHERE user_id = ? AND penalty_date = ? AND penalty_type = ? LIMIT 1'
         );
@@ -197,7 +201,7 @@ function attendance_process_noon_absence(mysqli $conn, string $date, ?int $compa
 
         $activeFilter = staff_sql_active_filter('');
         $stmt = $conn->prepare(
-            "SELECT id, branch_id FROM users WHERE role = 'staff' AND company_id = ?{$activeFilter}"
+            "SELECT * FROM users WHERE role = 'staff' AND company_id = ?{$activeFilter}"
         );
         $stmt->bind_param('i', $cid);
         $stmt->execute();
@@ -210,6 +214,9 @@ function attendance_process_noon_absence(mysqli $conn, string $date, ?int $compa
             $uid = (int) $u['id'];
             $bid = (int) ($u['branch_id'] ?? 0);
 
+            if (!attendance_penalty_applies($u, $date)) {
+                continue;
+            }
             if (attendance_staff_on_leave($conn, $uid, $date)) {
                 continue;
             }
@@ -249,7 +256,8 @@ function attendance_process_late_penalty(mysqli $conn, string $date, ?int $compa
     $now = date('H:i:s');
     
     $cid_filter = $companyId ? " AND company_id = " . (int)$companyId : "";
-    $stmt = $conn->prepare("SELECT id, name, phone_number, company_id, shift_start_time FROM users WHERE role='staff' AND account_status='active' AND ADDTIME(shift_start_time, '01:00:00') <= ? $cid_filter");
+    $grace = sprintf('%02d:%02d:00', intdiv((int) payroll_settings($conn)['late_grace_minutes'], 60), (int) payroll_settings($conn)['late_grace_minutes'] % 60);
+    $stmt = $conn->prepare("SELECT * FROM users WHERE role='staff' AND account_status='active' AND ADDTIME(shift_start_time, '$grace') <= ? $cid_filter");
     if (!$stmt) return;
     
     $stmt->bind_param("s", $now);
@@ -263,6 +271,7 @@ function attendance_process_late_penalty(mysqli $conn, string $date, ?int $compa
         $uid = (int) $u['id'];
         $cid = (int) $u['company_id'];
         
+        if (!attendance_penalty_applies($u, $date)) continue;
         if (attendance_staff_on_leave($conn, $uid, $date)) continue;
         
         $stmt_chk = $conn->prepare("SELECT id FROM attendance_logs WHERE user_id=? AND log_date=? AND is_leave=0");
@@ -280,10 +289,11 @@ function attendance_process_late_penalty(mysqli $conn, string $date, ?int $compa
         if ($penalized) continue;
         
         $ptype = 'late_punch';
-        $preason = 'Late Punch - No arrival within 1 hour of shift time (' . date('h:i A', strtotime($u['shift_start_time'])) . ')';
-        $pdays = 0.5;
+        $preason = 'Late Punch - No arrival within ' . (int) payroll_settings($conn)['late_grace_minutes'] . ' min of shift time (' . date('h:i A', strtotime($u['shift_start_time'])) . ')';
+        $pdays = (float) payroll_settings($conn)['penalty_late_days'];
+        if ($pdays <= 0) continue;
         $stmt_ins = $conn->prepare("INSERT INTO staff_penalties (user_id, company_id, penalty_date, penalty_type, deduction_days, reason, created_by) VALUES (?, ?, ?, ?, ?, ?, 0)");
-        $stmt_ins->bind_param("iissss", $uid, $cid, $date, $ptype, $pdays, $preason);
+        $stmt_ins->bind_param("iissds", $uid, $cid, $date, $ptype, $pdays, $preason);
         if ($stmt_ins->execute()) {
             if (!empty($u['phone_number'])) {
                 $msg = "⚠️ *Penalty Notice* ⚠️\n\n"
@@ -298,11 +308,89 @@ function attendance_process_late_penalty(mysqli $conn, string $date, ?int $compa
     }
 }
 
+/**
+ * Automatic absence / late penalties only for staff who punch themselves ("self" mode),
+ * never on their weekly off day and never before their joining date.
+ */
+function attendance_penalty_applies(array $u, string $date): bool
+{
+    if (($u['attendance_mode'] ?? ATT_MODE_SELF) !== ATT_MODE_SELF) {
+        return false;
+    }
+    if (!empty($u['join_date']) && $date < $u['join_date']) {
+        return false;
+    }
+
+    return !payroll_is_weekly_off($u, $date);
+}
+
+/**
+ * "Auto" attendance mode (fixed-salary staff): every working day is marked present automatically
+ * (shift start → standard hours), except weekly off, approved leave or a day that already has a record.
+ * Back-fills missed days (max 62 days) so it works even if nobody opened the site for a while.
+ */
+function attendance_auto_present(mysqli $conn, ?int $companyId = null): int
+{
+    if (!db_column_exists($conn, 'users', 'attendance_mode')) {
+        return 0;
+    }
+    $sql = "SELECT * FROM users WHERE role = 'staff' AND attendance_mode = 'auto'" . staff_sql_active_filter('');
+    if ($companyId) {
+        $sql .= ' AND company_id = ' . (int) $companyId;
+    }
+    $res = $conn->query($sql);
+    $hours = (float) payroll_settings($conn)['hourly_day_hours'];
+    $added = 0;
+    $now = date('H:i:s');
+    while ($res && ($u = $res->fetch_assoc())) {
+        $uid = (int) $u['id'];
+        $shift = substr((string) ($u['shift_start_time'] ?: '09:30:00'), 0, 8);
+        $from = max(
+            date('Y-m-d', strtotime('-62 days')),
+            (string) ($u['auto_attendance_from'] ?: date('Y-m-d')),
+            (string) ($u['join_date'] ?: '2000-01-01')
+        );
+        $to = $now >= $shift ? date('Y-m-d') : date('Y-m-d', strtotime('-1 day'));
+        $out = date('H:i:s', strtotime($shift) + (int) round($hours * 3600));
+        $mins = (int) round($hours * 60);
+        $reason = '[Auto present]';
+        for ($d = strtotime($from); $d <= strtotime($to); $d = strtotime('+1 day', $d)) {
+            $ds = date('Y-m-d', $d);
+            if (payroll_is_weekly_off($u, $ds)) {
+                continue;
+            }
+            $chk = $conn->prepare('SELECT id FROM attendance_logs WHERE user_id = ? AND log_date = ? LIMIT 1');
+            $chk->bind_param('is', $uid, $ds);
+            $chk->execute();
+            $exists = $chk->get_result()->num_rows > 0;
+            $chk->close();
+            if ($exists) {
+                continue;
+            }
+            $cid = (int) $u['company_id'];
+            $bid = (int) $u['branch_id'];
+            $ins = $conn->prepare('INSERT INTO attendance_logs (user_id, company_id, branch_id, log_date, punch_in, punch_out, total_worked_minutes, is_leave, leave_reason) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)');
+            $ins->bind_param('iiisssis', $uid, $cid, $bid, $ds, $shift, $out, $mins, $reason);
+            if ($ins->execute()) {
+                $added++;
+            }
+            $ins->close();
+        }
+    }
+
+    return $added;
+}
+
 /** Run today's noon job when due (safe to call on admin dashboard load). */
 function attendance_run_pending_automation(mysqli $conn, ?int $companyId = null): void
 {
     date_default_timezone_set('Asia/Kolkata');
     $today = date('Y-m-d');
+    try {
+        attendance_auto_present($conn, $companyId);
+    } catch (Throwable $e) {
+        error_log('attendance_auto_present: ' . $e->getMessage());
+    }
     
     try {
         attendance_process_late_penalty($conn, $today, $companyId);

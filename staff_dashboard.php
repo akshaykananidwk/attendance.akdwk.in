@@ -26,96 +26,24 @@ $branch_id = (int)($user_data['branch_id'] ?? 0);
 
 attendance_run_pending_automation($conn, $company_id > 0 ? $company_id : null);
 
-// Calculate Final Rate for Current Month
-$stmt = $conn->prepare("SELECT custom_hourly_rate FROM staff_monthly_rates WHERE user_id = ? AND month_year = ?");
-$stmt->bind_param("is", $user_id, $month_year_format);
-$stmt->execute();
-$custom_rate_q = $stmt->get_result()->fetch_assoc();
-$stmt->close();
-$custom_rate = $custom_rate_q ? $custom_rate_q['custom_hourly_rate'] : null;
-
-$base_rate = floatval($user_data['salary_amount']);
-$final_rate = $base_rate;
-$rate_badge = "";
-
-if (!empty($custom_rate)) {
-    $final_rate = floatval($custom_rate);
-    $rate_badge = "<span class='badge bg-primary ms-2'>Custom Rate</span>";
-} else {
-    // Auto Increment Logic matched with Admin
-    $start_date = (!empty($user_data['join_date'])) ? $user_data['join_date'] : '2026-01-01';
-    $j_date = strtotime($start_date);
-    $m_diff = (($current_year - date('Y', $j_date)) * 12) + ($current_month - date('m', $j_date));
-    if ($m_diff > 0) {
-        $final_rate += $m_diff;
-        $rate_badge = "<span class='badge bg-success ms-2'>+$m_diff Auto Inc.</span>";
-    }
-}
-
-// Monthly Stats for Salary calculation
-$stmt = $conn->prepare("SELECT 
-        SUM(CASE WHEN punch_in IS NOT NULL AND is_leave = 0 THEN COALESCE(total_worked_minutes, 0) ELSE 0 END) as month_mins, 
-        COUNT(DISTINCT CASE WHEN punch_in IS NOT NULL AND is_leave = 0 THEN log_date END) as days_present,
-        COUNT(CASE WHEN is_leave = 1 THEN 1 END) as leave_days
-        FROM attendance_logs 
-        WHERE user_id = ? AND MONTH(log_date) = ? AND YEAR(log_date) = ?");
-$stmt->bind_param("iss", $user_id, $current_month, $current_year);
-$stmt->execute();
-$stats = $stmt->get_result()->fetch_assoc();
-$stmt->close();
-
-$month_mins = $stats['month_mins'] ?? 0;
-$days_present = $stats['days_present'] ?? 0;
-
-// Current Month Upad & Jama
-$stmt_upad = $conn->prepare("SELECT COALESCE(SUM(amount), 0) as total FROM advance_payments WHERE user_id = ? AND MONTH(date) = ? AND YEAR(date) = ? AND transaction_type = 'Upad'");
-$stmt_upad->bind_param("iss", $user_id, $current_month, $current_year);
-$stmt_upad->execute();
-$month_upad = $stmt_upad->get_result()->fetch_assoc()['total'];
-$stmt_upad->close();
-
-$stmt_jama = $conn->prepare("SELECT COALESCE(SUM(amount), 0) as total FROM advance_payments WHERE user_id = ? AND MONTH(date) = ? AND YEAR(date) = ? AND transaction_type = 'Jama'");
-$stmt_jama->bind_param("iss", $user_id, $current_month, $current_year);
-$stmt_jama->execute();
-$month_jama = $stmt_jama->get_result()->fetch_assoc()['total'];
-$stmt_jama->close();
-
-// Opening Balance
-$opening_balance = calculateOpeningBalance($conn, $user_id, $current_month, $current_year);
-
-// Subsequent Upad & Jama (After the selected month)
+// All salary numbers come from the single payroll engine (includes/payroll.php)
+$P = payroll_slip($conn, $user_id, (int) $current_year, (int) $current_month);
+$final_rate = $P['rate'];
+$rate_badge = $P['rate_source'] !== 'Base rate' ? "<span class='badge bg-primary ms-2'>" . htmlspecialchars($P['rate_source']) . '</span>' : '';
+$month_mins = $P['minutes'];
+$days_present = $P['days_present'];
+$stats = ['month_mins' => $P['minutes'], 'days_present' => $P['days_present'], 'leave_days' => $P['leave_days']];
+$month_upad = $P['month_upad'];
+$month_jama = $P['month_jama'];
+$opening_balance = $P['opening_balance'];
 $end_of_selected_month = date('Y-m-t', strtotime("$current_year-$current_month-01"));
-$stmt_sub_upad = $conn->prepare("SELECT COALESCE(SUM(amount), 0) as total FROM advance_payments WHERE user_id = ? AND date > ? AND transaction_type = 'Upad'");
-$stmt_sub_upad->bind_param("is", $user_id, $end_of_selected_month);
-$stmt_sub_upad->execute();
-$subsequent_upad = $stmt_sub_upad->get_result()->fetch_assoc()['total'];
-$stmt_sub_upad->close();
-
-$stmt_sub_jama = $conn->prepare("SELECT COALESCE(SUM(amount), 0) as total FROM advance_payments WHERE user_id = ? AND date > ? AND transaction_type = 'Jama'");
-$stmt_sub_jama->bind_param("is", $user_id, $end_of_selected_month);
-$stmt_sub_jama->execute();
-$subsequent_jama = $stmt_sub_jama->get_result()->fetch_assoc()['total'];
-$stmt_sub_jama->close();
-
-// Live Salary Calculation
-$gross_salary = ($user_data['salary_type'] == 'hourly') ? ($month_mins / 60) * $final_rate : ($final_rate / 30) * $days_present;
-
-// Penalty Calculation
-$penalty_days = salary_penalty_day_deductions($conn, $user_id, $current_month, $current_year);
-$penalty_amount = 0.0;
-$resignation_withhold = salary_resignation_withhold($conn, $user_id, $current_month, $current_year);
-
-if ($resignation_withhold) {
-    $penalty_amount = $gross_salary;
-} elseif ($penalty_days > 0) {
-    $daily = $user_data['salary_type'] === 'hourly' ? ($final_rate * 8) : ($final_rate / 30);
-    $penalty_amount = $penalty_days * $daily;
-    if ($penalty_amount > $gross_salary) {
-        $penalty_amount = $gross_salary;
-    }
-}
-
-$net_payable = $opening_balance + ($gross_salary - $penalty_amount) + $month_jama - $month_upad + $subsequent_jama - $subsequent_upad;
+$subsequent_upad = $P['subsequent_upad'];
+$subsequent_jama = $P['subsequent_jama'];
+$gross_salary = $P['gross'];
+$penalty_days = $P['penalty_days'];
+$penalty_amount = $P['penalty_amount'];
+$resignation_withhold = $P['resignation_withhold'];
+$net_payable = $P['net'];
 
 // Attendance Logs (Filtered by Selected Month)
 $stmt_logs = $conn->prepare("SELECT * FROM attendance_logs WHERE user_id = ? AND MONTH(log_date) = ? AND YEAR(log_date) = ? ORDER BY log_date DESC");

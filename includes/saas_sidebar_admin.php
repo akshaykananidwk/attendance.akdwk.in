@@ -44,6 +44,7 @@ $saas_is_auditor = function_exists('is_auditor') && is_auditor();
             <a href="admin_reports.php" class="<?php echo $saas_cur === 'admin_reports.php' ? 'active' : ''; ?>"><i class="bi bi-bar-chart-line-fill"></i> Salary reports</a>
             <a href="admin_salary_slip.php" class="<?php echo $saas_cur === 'admin_salary_slip.php' ? 'active' : ''; ?>"><i class="bi bi-file-earmark-text-fill"></i> Salary slips</a>
             <a href="admin_payments.php" class="<?php echo $saas_cur === 'admin_payments.php' ? 'active' : ''; ?>"><i class="bi bi-currency-rupee"></i> Salary payments</a>
+            <a href="admin_payroll_rules.php" class="<?php echo $saas_cur === 'admin_payroll_rules.php' ? 'active' : ''; ?>"><i class="bi bi-calculator"></i> Payroll rules &amp; check</a>
 
             <div class="saas-nav-section-label">Data &amp; system</div>
             <a href="admin_exports.php" class="<?php echo $saas_cur === 'admin_exports.php' ? 'active' : ''; ?>"><i class="bi bi-file-earmark-spreadsheet"></i> Data exports</a>

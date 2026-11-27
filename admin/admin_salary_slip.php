@@ -41,115 +41,30 @@ if ($selected_user != '') {
     if (!$staff) {
         // skip slip generation
     } else {
-    // Calculate Final Rate for Current Month
-    $stmt = $conn->prepare("SELECT custom_hourly_rate FROM staff_monthly_rates WHERE user_id = ? AND month_year = ?");
-    $stmt->bind_param("is", $selected_user, $month_year_format);
-    $stmt->execute();
-    $custom_rate_q = $stmt->get_result()->fetch_assoc();
-    $stmt->close();
-    $custom_rate = $custom_rate_q ? $custom_rate_q['custom_hourly_rate'] : null;
-
-    $base_rate = floatval($staff['salary_amount']);
-    $final_rate = $base_rate;
-    $rate_badge = "";
-
-    if (!empty($custom_rate)) {
-        $final_rate = floatval($custom_rate);
-        $rate_badge = "(Custom)";
-    } else {
-        $start_date = (!empty($staff['join_date'])) ? $staff['join_date'] : '2026-01-01';
-        $j_date = strtotime($start_date);
-        $m_diff = (($selected_year - date('Y', $j_date)) * 12) + ($selected_month - date('m', $j_date));
-        if ($m_diff > 0) {
-            $final_rate += $m_diff;
-            $rate_badge = "(Auto Inc. +$m_diff)";
-        }
-    }
-
-    // Fetch Monthly Attendance Stats (minutes only on present rows; days = distinct dates)
-    $stmt = $conn->prepare("SELECT 
-        SUM(CASE WHEN punch_in IS NOT NULL AND is_leave = 0 THEN COALESCE(total_worked_minutes, 0) ELSE 0 END) as total_mins, 
-        COUNT(DISTINCT CASE WHEN punch_in IS NOT NULL AND is_leave = 0 THEN log_date END) as days_present,
-        COUNT(CASE WHEN is_leave = 1 THEN 1 END) as leave_days
-        FROM attendance_logs 
-        WHERE user_id = ? AND MONTH(log_date) = ? AND YEAR(log_date) = ?");
-    $stmt->bind_param("iss", $selected_user, $selected_month, $selected_year);
-    $stmt->execute();
-    $att_res = $stmt->get_result()->fetch_assoc();
-    $stmt->close();
-
-    // Current Month Upad & Jama
-    $stmt_upad = $conn->prepare("SELECT COALESCE(SUM(amount), 0) as total FROM advance_payments WHERE user_id = ? AND MONTH(date) = ? AND YEAR(date) = ? AND transaction_type = 'Upad'");
-    $stmt_upad->bind_param("iss", $selected_user, $selected_month, $selected_year);
-    $stmt_upad->execute();
-    $month_upad = $stmt_upad->get_result()->fetch_assoc()['total'];
-    $stmt_upad->close();
-
-    $stmt_jama = $conn->prepare("SELECT COALESCE(SUM(amount), 0) as total FROM advance_payments WHERE user_id = ? AND MONTH(date) = ? AND YEAR(date) = ? AND transaction_type = 'Jama'");
-    $stmt_jama->bind_param("iss", $selected_user, $selected_month, $selected_year);
-    $stmt_jama->execute();
-    $month_jama = $stmt_jama->get_result()->fetch_assoc()['total'];
-    $stmt_jama->close();
-
-    $total_mins = (int) ($att_res['total_mins'] ?? 0);
-    $days_present = (int) ($att_res['days_present'] ?? 0);
-    $avg_hours_per_present_day = $days_present > 0 ? round(($total_mins / 60) / $days_present, 2) : 0.0;
-
-    // Subsequent Upad & Jama (After the selected month)
-    $end_of_selected_month = date('Y-m-t', strtotime("$selected_year-$selected_month-01"));
-    $stmt_sub_upad = $conn->prepare("SELECT COALESCE(SUM(amount), 0) as total FROM advance_payments WHERE user_id = ? AND date > ? AND transaction_type = 'Upad'");
-    $stmt_sub_upad->bind_param("is", $selected_user, $end_of_selected_month);
-    $stmt_sub_upad->execute();
-    $subsequent_upad = $stmt_sub_upad->get_result()->fetch_assoc()['total'];
-    $stmt_sub_upad->close();
-
-    $stmt_sub_jama = $conn->prepare("SELECT COALESCE(SUM(amount), 0) as total FROM advance_payments WHERE user_id = ? AND date > ? AND transaction_type = 'Jama'");
-    $stmt_sub_jama->bind_param("is", $selected_user, $end_of_selected_month);
-    $stmt_sub_jama->execute();
-    $subsequent_jama = $stmt_sub_jama->get_result()->fetch_assoc()['total'];
-    $stmt_sub_jama->close();
-
-    // Opening Balance
-    $opening_balance = calculateOpeningBalance($conn, $selected_user, $selected_month, $selected_year);
-
-    // Salary Calculation
-    $gross_salary = ($staff['salary_type'] == 'hourly') ? ($total_mins / 60) * $final_rate : ($final_rate / 30) * $days_present;
-    
-    // Penalty Calculation
-    $penalty_days = salary_penalty_day_deductions($conn, $selected_user, $selected_month, $selected_year);
-    $penalty_amount = 0.0;
-    $resignation_withhold = salary_resignation_withhold($conn, $selected_user, $selected_month, $selected_year);
-    
-    if ($resignation_withhold) {
-        $penalty_amount = $gross_salary;
-    } elseif ($penalty_days > 0) {
-        $daily = $staff['salary_type'] === 'hourly' ? ($final_rate * 8) : ($final_rate / 30);
-        $penalty_amount = $penalty_days * $daily;
-        if ($penalty_amount > $gross_salary) {
-            $penalty_amount = $gross_salary;
-        }
-    }
-
-    $net_payable = $opening_balance + ($gross_salary - $penalty_amount) + $month_jama - $month_upad + $subsequent_jama - $subsequent_upad;
-
+    // All numbers come from the single payroll engine (includes/payroll.php)
+    $P = payroll_slip($conn, (int) $selected_user, (int) $selected_year, (int) $selected_month);
     $slip_data = [
         'staff' => $staff,
-        'final_rate' => $final_rate,
-        'rate_badge' => $rate_badge,
-        'hours' => round($total_mins / 60, 2),
-        'days' => $days_present,
-        'avg_hours_per_day' => $avg_hours_per_present_day,
-        'leaves' => $att_res['leave_days'],
-        'gross' => $gross_salary,
-        'penalty_days' => $penalty_days,
-        'penalty_amount' => $penalty_amount,
-        'resignation_withhold' => $resignation_withhold,
-        'opening_balance' => $opening_balance,
-        'month_upad' => $month_upad,
-        'month_jama' => $month_jama,
-        'subsequent_upad' => $subsequent_upad,
-        'subsequent_jama' => $subsequent_jama,
-        'net' => $net_payable
+        'final_rate' => $P['rate'],
+        'rate_badge' => '(' . $P['rate_source'] . ')',
+        'hours' => $P['hours'],
+        'days' => $P['days_present'],
+        'paid_off_days' => $P['paid_off_days'],
+        'weekly_off_label' => payroll_weekly_off_label($P['user']),
+        'avg_hours_per_day' => $P['days_present'] > 0 ? round($P['hours'] / $P['days_present'], 2) : 0.0,
+        'leaves' => $P['leave_days'],
+        'gross' => $P['gross'],
+        'penalty_days' => $P['penalty_days'],
+        'penalty_amount' => $P['penalty_amount'],
+        'day_value' => $P['day_value'],
+        'resignation_withhold' => $P['resignation_withhold'],
+        'opening_balance' => $P['opening_balance'],
+        'month_upad' => $P['month_upad'],
+        'month_jama' => $P['month_jama'],
+        'subsequent_upad' => $P['subsequent_upad'],
+        'subsequent_jama' => $P['subsequent_jama'],
+        'net' => $P['net'],
+        'rules' => $P['rules'],
     ];
     }
 }
@@ -263,7 +178,11 @@ if ($selected_user != '') {
                                 <?php if ($slip_data['staff']['salary_type'] === 'hourly'): ?>
                                     <?= (int) $slip_data['days'] ?> day(s) · <strong><?= $slip_data['hours'] ?> hrs</strong> × ₹<?= number_format($slip_data['final_rate'], 2) ?>/hr
                                 <?php else: ?>
-                                    Pay basis: <strong><?= (int) $slip_data['days'] ?> calendar day(s) present</strong> × (monthly ÷ 30).
+                                    <?php if ($slip_data['rules'] === 'v2'): ?>
+                                    Pay basis: <strong><?= (int) $slip_data['days'] ?> present</strong><?= $slip_data['paid_off_days'] > 0 ? ' + <strong>' . (int) $slip_data['paid_off_days'] . ' paid weekly off</strong> (' . htmlspecialchars($slip_data['weekly_off_label']) . ')' : '' ?> × (monthly ÷ days in month).
+                                    <?php else: ?>
+                                    Pay basis: <strong><?= (int) $slip_data['days'] ?> calendar day(s) present</strong> × (monthly ÷ 30) <span class="badge bg-secondary">old rules</span>.
+                                    <?php endif; ?>
                                     <br><span class="text-secondary">On those days: <strong><?= $slip_data['hours'] ?> hrs</strong> logged total<?= $slip_data['days'] > 0 ? ' (avg ' . $slip_data['avg_hours_per_day'] . ' hrs/day)' : '' ?> — monthly pay uses day count only, not these hours.</span>
                                 <?php endif; ?>
                                 </small>
@@ -293,7 +212,7 @@ if ($selected_user != '') {
                                 <?php if ($slip_data['resignation_withhold']): ?>
                                 <small class="text-danger">Resignation Rule 13</small>
                                 <?php else: ?>
-                                <small class="text-danger"><?= (float) $slip_data['penalty_days'] ?> day(s)</small>
+                                <small class="text-danger"><?= (float) $slip_data['penalty_days'] ?> day(s) × ₹<?= number_format($slip_data['day_value'], 2) ?></small>
                                 <?php endif; ?>
                             </td>
                             <td class="text-end text-danger fw-bold">- ₹<?=number_format($slip_data['penalty_amount'], 2)?></td>
