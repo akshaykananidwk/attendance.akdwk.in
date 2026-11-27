@@ -18,6 +18,7 @@ $saas_is_auditor = function_exists('is_auditor') && is_auditor();
             <a href="admin_exports.php" class="<?php echo $saas_cur === 'admin_exports.php' ? 'active' : ''; ?>"><i class="bi bi-file-earmark-spreadsheet"></i> Data exports</a>
             <a href="admin_live_tracking.php" class="<?php echo $saas_cur === 'admin_live_tracking.php' ? 'active' : ''; ?>"><i class="bi bi-geo-alt-fill"></i> Live tracking</a>
             <a href="admin_audit_log.php" class="<?php echo $saas_cur === 'admin_audit_log.php' ? 'active' : ''; ?>"><i class="bi bi-journal-text"></i> Audit log</a>
+            <a href="admin_password.php" class="<?php echo $saas_cur === 'admin_password.php' ? 'active' : ''; ?>"><i class="bi bi-key-fill"></i> Change password</a>
             <a href="../logout.php" class="mt-4 text-danger fw-bold"><i class="bi bi-box-arrow-left"></i> Logout</a>
         <?php else: ?>
             <div class="saas-nav-section-label">Overview</div>
@@ -53,6 +54,7 @@ $saas_is_auditor = function_exists('is_auditor') && is_auditor();
             <a href="admin_backup.php" class="<?php echo $saas_cur === 'admin_backup.php' ? 'active' : ''; ?>"><i class="bi bi-cloud-download-fill"></i> Backup &amp; restore</a>
             <a href="admin_updates.php" class="<?php echo $saas_cur === 'admin_updates.php' ? 'active' : ''; ?>"><i class="bi bi-cloud-arrow-down-fill"></i> System update</a>
 
+            <a href="admin_password.php" class="<?php echo $saas_cur === 'admin_password.php' ? 'active' : ''; ?>"><i class="bi bi-key-fill"></i> Change password</a>
             <a href="../logout.php" class="mt-4 text-danger fw-bold"><i class="bi bi-box-arrow-left"></i> Logout</a>
         <?php endif; ?>
     </div>

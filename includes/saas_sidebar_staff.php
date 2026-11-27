@@ -17,6 +17,9 @@ $saas_cur = basename($_SERVER['PHP_SELF'] ?? '');
         <a href="staff_leave.php" class="<?php echo $saas_cur === 'staff_leave.php' ? 'active' : ''; ?>"><i class="bi bi-calendar-event"></i> Request leave</a>
         <a href="staff_resignation.php" class="<?php echo $saas_cur === 'staff_resignation.php' ? 'active' : ''; ?>"><i class="bi bi-door-open"></i> Resignation</a>
 
+        <div class="saas-nav-section-label">Account</div>
+        <a href="staff_password.php" class="<?php echo $saas_cur === 'staff_password.php' ? 'active' : ''; ?>"><i class="bi bi-key-fill"></i> Change password</a>
+
         <a href="logout.php" class="mt-4 text-danger fw-bold"><i class="bi bi-box-arrow-left"></i> Logout</a>
     </div>
 </div>
