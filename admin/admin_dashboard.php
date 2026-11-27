@@ -82,8 +82,34 @@ $stmt = $conn->prepare(
 $stmt->bind_param('i', $company_id);
 $stmt->execute();
 $staff_result = $stmt->get_result();
-?>
 
+// Weekly trend: staff present per day (last 7 days)
+$trend_labels = [];
+$trend_values = [];
+$stmt = $conn->prepare("SELECT a.log_date, COUNT(DISTINCT a.user_id) AS n FROM attendance_logs a JOIN users u ON u.id = a.user_id
+    WHERE u.company_id = ? AND u.role = 'staff' AND a.log_date BETWEEN ? AND ? AND a.punch_in IS NOT NULL AND COALESCE(a.is_leave,0) < 1
+    GROUP BY a.log_date");
+$from7 = date('Y-m-d', strtotime('-6 days'));
+$to7 = date('Y-m-d');
+$stmt->bind_param('iss', $company_id, $from7, $to7);
+$stmt->execute();
+$tr = [];
+foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $row) {
+    $tr[$row['log_date']] = (int) $row['n'];
+}
+$stmt->close();
+for ($i = 6; $i >= 0; $i--) {
+    $d = date('Y-m-d', strtotime("-$i days"));
+    $trend_labels[] = date('d M', strtotime($d));
+    $trend_values[] = $tr[$d] ?? 0;
+}
+$branches_list = [];
+$br = $conn->query("SELECT id, name FROM branches WHERE company_id = " . (int) $company_id . " ORDER BY name");
+while ($br && ($b = $br->fetch_assoc())) {
+    $branches_list[] = $b;
+}
+$pct = static fn (int $n) => $total_staff > 0 ? round($n * 100 / $total_staff) : 0;
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -92,8 +118,15 @@ $staff_result = $stmt->get_result();
     <title>Admin Dashboard | Smart Attendance</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <link rel="stylesheet" href="../assets/saas_theme.css">
+    <style>
+        .dash-legend li { display:flex; align-items:center; justify-content:space-between; padding:.42rem 0; font-weight:600; font-size:.92rem; }
+        .dash-legend .dot { width:11px; height:11px; border-radius:50%; display:inline-block; margin-right:.6rem; }
+        .donut-wrap { position:relative; width:190px; height:190px; flex:0 0 190px; }
+        .donut-center { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+        .donut-center b { font-size:1.9rem; font-weight:800; line-height:1; } .donut-center span { color:var(--ui-muted); font-weight:600; }
+    </style>
 </head>
 <body>
 <div class="saas-sidebar-backdrop" id="saasSidebarBackdrop" aria-hidden="true"></div>
@@ -102,148 +135,138 @@ $staff_result = $stmt->get_result();
         <?php require_once __DIR__ . '/../includes/saas_sidebar_admin.php'; ?>
 
         <div class="col-md-10 main-content">
-            
-            <div class="dashboard-header">
-                <div>
-                    <button class="mobile-toggle me-2" onclick="toggleSidebar()"><i class="bi bi-list fs-4"></i></button>
-                    <span class="fs-4 fw-bold text-dark">Welcome, <?php echo htmlspecialchars($_SESSION['name']); ?></span>
-                </div>
-                <div class="text-muted fw-bold hide-mobile">
-                    <i class="bi bi-calendar3"></i> <?php echo date('d F, Y'); ?> &nbsp;|&nbsp; <i class="bi bi-clock"></i> <span id="clock"></span>
-                </div>
+            <?php echo ui_hero(
+                'Welcome back, ' . ui_e($_SESSION['name'] ?? '') . ' 👋',
+                "Here's what's happening in your organization today.",
+                '',
+                'temple',
+                '<span class="ui-chip ui-hide-sm"><i class="bi bi-calendar3"></i>' . date('l, d F, Y') . '</span><span class="ui-chip"><i class="bi bi-clock"></i><span id="clock">' . date('h:i:s A') . '</span></span>'
+            ); ?>
+
+            <div class="ui-stats">
+                <?php
+                echo ui_stat($total_branches, 'Active Branches', 'bi-building', 'blue', 'admin_branches.php');
+                echo ui_stat($present_staff, 'Present', 'bi-people-fill', 'green', 'admin_live_tracking.php');
+                echo ui_stat($absent_staff, 'Absent', 'bi-person-x', 'red', 'admin_live_tracking.php');
+                echo ui_stat($leave_staff, 'On Leave', 'bi-calendar2-week', 'orange', 'admin_leaves.php');
+                echo ui_stat($half_day_staff, 'Half Day', 'bi-hourglass-split', 'purple', 'admin_live_tracking.php');
+                echo ui_stat($late_staff, 'Late', 'bi-clock', 'cyan', 'admin_live_tracking.php');
+                echo ui_stat($pending_tasks, 'Pending Tasks', 'bi-check2-square', 'violet', 'admin_tasks.php');
+                ?>
             </div>
 
-            <div class="row">
-                <div class="col-lg-5 mb-4">
-                    <div class="card h-100 p-4">
-                        <h5 class="fw-bold text-center mb-3"><i class="bi bi-pie-chart-fill text-primary"></i> Today's Attendance Status</h5>
-                        <div style="height: 250px; margin: 0 auto; width: 100%;">
-                            <canvas id="attendanceChart"></canvas>
+            <div class="row g-3 mb-3">
+                <div class="col-xl-4 col-lg-6">
+                    <div class="ui-panel h-100">
+                        <h5 class="ui-panel-title mb-3"><i class="bi bi-people-fill"></i> Today's Attendance Status</h5>
+                        <div class="d-flex align-items-center gap-4 flex-wrap">
+                            <div class="donut-wrap"><canvas id="attendanceChart"></canvas>
+                                <div class="donut-center"><b><?php echo $present_staff; ?> / <?php echo $total_staff; ?></b><span>Present</span></div></div>
+                            <ul class="list-unstyled dash-legend flex-grow-1 mb-0">
+                                <?php foreach ([['Present', $present_staff, '#22c55e'], ['On Leave', $leave_staff, '#f59e0b'], ['Late', $late_staff, '#0ea5e9'], ['Half Day', $half_day_staff, '#7c3aed'], ['Absent', $absent_staff, '#e11d48']] as [$l, $n, $c]): ?>
+                                    <li><span><span class="dot" style="background:<?php echo $c; ?>"></span><?php echo $l; ?></span><span><?php echo $n; ?> <span class="text-muted">(<?php echo $pct($n); ?>%)</span></span></li>
+                                <?php endforeach; ?>
+                            </ul>
                         </div>
                     </div>
                 </div>
-
-                <div class="col-lg-7 mb-4">
-                    <div class="row g-3 h-100">
-                        <div class="col-md-6">
-                            <div class="card p-4 h-100 d-flex flex-column justify-content-center align-items-center" style="border-left: 5px solid #0d6efd;">
-                                <h2 class="fw-bold text-primary mb-0"><?php echo $total_branches; ?></h2>
-                                <span class="text-muted fw-bold">Active Branches</span>
-                            </div>
+                <div class="col-xl-4 col-lg-6">
+                    <div class="ui-panel h-100">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h5 class="ui-panel-title"><i class="bi bi-graph-up-arrow"></i> Weekly Attendance Trend</h5>
+                            <span class="ui-pill gray">Last 7 days</span>
                         </div>
-                        <div class="col-md-6">
-                            <div class="card p-4 h-100 d-flex flex-column justify-content-center align-items-center" style="border-left: 5px solid #6610f2;">
-                                <h2 class="fw-bold text-indigo mb-0"><?php echo $pending_tasks; ?></h2>
-                                <span class="text-muted fw-bold">Pending Tasks</span>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="card p-4 h-100 d-flex flex-column justify-content-center align-items-center" style="border-left: 5px solid #25D366;">
-                                <h2 class="fw-bold text-success mb-0"><?php echo $present_staff; ?></h2>
-                                <span class="text-muted fw-bold small">Present</span>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="card p-4 h-100 d-flex flex-column justify-content-center align-items-center" style="border-left: 5px solid #ffc107;">
-                                <h2 class="fw-bold text-warning mb-0"><?php echo $leave_staff; ?></h2>
-                                <span class="text-muted fw-bold small">On Leave</span>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="card p-4 h-100 d-flex flex-column justify-content-center align-items-center" style="border-left: 5px solid #dc3545;">
-                                <h2 class="fw-bold text-danger mb-0"><?php echo $absent_staff; ?></h2>
-                                <span class="text-muted fw-bold small">Absent</span>
-                            </div>
-                        </div>
-                        <div class="col-6 col-md-4">
-                            <div class="card p-3 h-100 d-flex flex-column justify-content-center align-items-center" style="border-left: 5px solid #0dcaf0;">
-                                <h2 class="fw-bold text-info mb-0"><?php echo $late_staff; ?></h2>
-                                <span class="text-muted fw-bold small">Late</span>
-                            </div>
-                        </div>
-                        <div class="col-6 col-md-4">
-                            <div class="card p-3 h-100 d-flex flex-column justify-content-center align-items-center" style="border-left: 5px solid #6f42c1;">
-                                <h2 class="fw-bold mb-0" style="color:#6f42c1;"><?php echo $half_day_staff; ?></h2>
-                                <span class="text-muted fw-bold small">Half Day</span>
-                            </div>
+                        <div style="height:220px"><canvas id="trendChart"></canvas></div>
+                    </div>
+                </div>
+                <div class="col-xl-4">
+                    <div class="ui-panel h-100">
+                        <h5 class="ui-panel-title mb-3"><i class="bi bi-lightning-charge-fill"></i> Quick Actions</h5>
+                        <div class="ui-quick">
+                            <a href="admin_staff.php?add=1" class="ui-c-blue"><i class="bi bi-person-plus text-primary"></i>Add Staff</a>
+                            <a href="admin_manual_time.php" class="ui-c-green"><i class="bi bi-calendar-check text-success"></i>Mark Attendance</a>
+                            <a href="admin_tasks.php" class="ui-c-purple"><i class="bi bi-check2-square" style="color:#7c3aed"></i>Create Task</a>
+                            <a href="admin_announcements.php" class="ui-c-orange"><i class="bi bi-megaphone" style="color:#f59e0b"></i>Add Announcement</a>
+                            <a href="admin_salary_slip.php" class="ui-c-red"><i class="bi bi-currency-rupee" style="color:#e11d48"></i>Generate Salary</a>
+                            <a href="admin_reports.php" class="ui-c-cyan"><i class="bi bi-bar-chart-line" style="color:#0284c7"></i>View Reports</a>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div class="card p-4">
-                <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h5 class="fw-bold mb-0"><i class="bi bi-people-fill text-primary"></i> Registered Staff Overview</h5>
+            <div class="ui-panel">
+                <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+                    <h5 class="ui-panel-title"><i class="bi bi-people-fill"></i> Registered Staff Overview</h5>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <div class="ui-search" style="flex-basis:220px"><i class="bi bi-search"></i><input type="search" id="staffFilter" placeholder="Search staff…" style="padding-right:.8rem"></div>
+                        <select class="form-select" id="branchFilter" style="width:auto">
+                            <option value="">All Branches</option>
+                            <?php foreach ($branches_list as $b): ?><option><?php echo ui_e($b['name']); ?></option><?php endforeach; ?>
+                        </select>
+                        <button class="btn btn-outline-primary fw-semibold" id="exportCsv" type="button"><i class="bi bi-download"></i> Export</button>
+                    </div>
                 </div>
-                
                 <div class="table-responsive">
-                    <table class="table table-hover table-bordered align-middle text-center border">
-                        <thead class="table-dark">
-                            <tr>
-                                <th>Staff Name</th>
-                                <th>Branch</th>
-                                <th>WhatsApp Number</th>
-                                <th>Salary Base</th>
-                                <th>Message Status</th>
-                            </tr>
-                        </thead>
+                    <table class="ui-table" id="staffTable">
+                        <thead><tr><th>#</th><th>Staff Name</th><th>Branch</th><th><i class="bi bi-whatsapp"></i> WhatsApp Number</th><th>Salary Base</th><th>Message Status</th><th class="text-center">Actions</th></tr></thead>
                         <tbody>
-                            <?php
-                            if ($staff_result && $staff_result->num_rows > 0) {
-                                while($row = $staff_result->fetch_assoc()) {
-                                    $msg_badge = ($row['msg_active'] == 1) ? "<span class='badge bg-success'><i class='bi bi-check-circle'></i> Active</span>" : "<span class='badge bg-danger'><i class='bi bi-x-circle'></i> Disabled</span>";
-                                    echo "<tr>
-                                            <td class='fw-bold text-start ps-3'><i class='bi bi-person-circle text-secondary'></i> {$row['name']}</td>
-                                            <td><span class='badge bg-info'>{$row['branch_name']}</span></td>
-                                            <td>{$row['phone_number']}</td>
-                                            <td><span class='badge bg-secondary'>" . ucfirst($row['salary_type']) . "</span><br>₹{$row['salary_amount']}</td>
-                                            <td>{$msg_badge}</td>
-                                          </tr>";
-                                }
-                            } else {
-                                echo "<tr><td colspan='4' class='text-muted py-4'>No staff members found.</td></tr>";
-                            }
-                            ?>
+                        <?php $i = 0; if ($staff_result && $staff_result->num_rows > 0): while ($row = $staff_result->fetch_assoc()): $i++; ?>
+                            <tr data-branch="<?php echo ui_e($row['branch_name'] ?? ''); ?>">
+                                <td><?php echo $i; ?></td>
+                                <td><div class="d-flex align-items-center gap-2"><?php echo ui_avatar((string) $row['name'], 'sm'); ?><b><?php echo ui_e($row['name']); ?></b></div></td>
+                                <td><span class="ui-branch-tag"><i class="bi bi-shop"></i><?php echo ui_e($row['branch_name'] ?? '—'); ?></span></td>
+                                <td><i class="bi bi-whatsapp text-success me-1"></i><?php echo ui_e($row['phone_number']); ?></td>
+                                <td><span class="ui-pill gray me-1"><?php echo ui_e(ucfirst((string) $row['salary_type'])); ?></span>₹<?php echo number_format((float) $row['salary_amount'], 2); ?></td>
+                                <td><?php echo (int) $row['msg_active'] === 1 ? '<span class="ui-pill solid-green"><i class="bi bi-check-lg"></i> Active</span>' : '<span class="ui-pill solid-red"><i class="bi bi-x-lg"></i> Off</span>'; ?></td>
+                                <td class="text-center text-nowrap">
+                                    <a class="ui-act view" title="Salary slip" href="admin_salary_slip.php?user_id=<?php echo (int) $row['id']; ?>"><i class="bi bi-eye"></i></a>
+                                    <a class="ui-act edit" title="Edit in Staff" href="admin_staff.php?filter=all&q=<?php echo rawurlencode((string) $row['name']); ?>"><i class="bi bi-pencil-square"></i></a>
+                                    <a class="ui-act del" title="Deactivate (staff are never deleted)" href="admin_staff.php?filter=all&q=<?php echo rawurlencode((string) $row['name']); ?>"><i class="bi bi-person-dash"></i></a>
+                                </td>
+                            </tr>
+                        <?php endwhile; else: ?>
+                            <tr><td colspan="7" class="text-center text-muted py-4">No staff members found.</td></tr>
+                        <?php endif; ?>
                         </tbody>
                     </table>
                 </div>
             </div>
-
         </div>
     </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-    // Live Clock
-    function updateClock() {
-        var now = new Date();
-        document.getElementById('clock').innerText = now.toLocaleTimeString();
+    setInterval(function () { var c = document.getElementById('clock'); if (c) c.textContent = new Date().toLocaleTimeString('en-IN', {hour: '2-digit', minute: '2-digit', second: '2-digit'}); }, 1000);
+    if (window.Chart) {
+        new Chart(document.getElementById('attendanceChart'), {
+            type: 'doughnut',
+            data: { labels: ['Present', 'On Leave', 'Late', 'Half Day', 'Absent'],
+                datasets: [{ data: [<?php echo (int) $present_staff; ?>, <?php echo (int) $leave_staff; ?>, <?php echo (int) $late_staff; ?>, <?php echo (int) $half_day_staff; ?>, <?php echo (int) $absent_staff; ?>],
+                    backgroundColor: ['#22c55e', '#f59e0b', '#0ea5e9', '#7c3aed', '#e11d48'], borderWidth: 0 }] },
+            options: { responsive: true, maintainAspectRatio: false, cutout: '74%', plugins: { legend: { display: false } } }
+        });
+        var tctx = document.getElementById('trendChart').getContext('2d');
+        var grad = tctx.createLinearGradient(0, 0, 0, 220); grad.addColorStop(0, 'rgba(34,197,94,.35)'); grad.addColorStop(1, 'rgba(34,197,94,0)');
+        new Chart(tctx, {
+            type: 'line',
+            data: { labels: <?php echo json_encode($trend_labels); ?>, datasets: [{ data: <?php echo json_encode($trend_values); ?>, borderColor: '#22c55e', backgroundColor: grad, fill: true, tension: .4, pointBackgroundColor: '#fff', pointBorderColor: '#22c55e', pointBorderWidth: 2, pointRadius: 4 }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true, suggestedMax: <?php echo max(1, (int) $total_staff); ?>, ticks: { precision: 0 }, grid: { color: 'rgba(148,163,184,.15)' } }, x: { grid: { display: false } } } }
+        });
     }
-    setInterval(updateClock, 1000);
-    updateClock();
-
-    // Chart.js Setup for Today's Attendance
-    const ctx = document.getElementById('attendanceChart').getContext('2d');
-    const attendanceChart = new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-            labels: ['Present', 'On Leave', 'Late', 'Half Day', 'Absent'],
-            datasets: [{
-                data: [<?php echo $present_staff; ?>, <?php echo $leave_staff; ?>, <?php echo $late_staff; ?>, <?php echo $half_day_staff; ?>, <?php echo $absent_staff; ?>],
-                backgroundColor: ['#25D366', '#ffc107', '#0dcaf0', '#6f42c1', '#dc3545'],
-                borderWidth: 0
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            cutout: '70%',
-            plugins: {
-                legend: { position: 'bottom' }
-            }
-        }
-    });
+    (function () {
+        var q = document.getElementById('staffFilter'), b = document.getElementById('branchFilter'), rows = document.querySelectorAll('#staffTable tbody tr[data-branch]');
+        function f() { var t = q.value.toLowerCase(), br = b.value; rows.forEach(function (r) { r.style.display = (r.textContent.toLowerCase().indexOf(t) !== -1 && (!br || r.dataset.branch === br)) ? '' : 'none'; }); }
+        q.addEventListener('input', f); b.addEventListener('change', f);
+        document.getElementById('exportCsv').addEventListener('click', function () {
+            var out = [['Staff', 'Branch', 'WhatsApp', 'Salary type', 'Salary', 'Messages']];
+            rows.forEach(function (r) { if (r.style.display === 'none') return; var c = r.querySelectorAll('td');
+                out.push([c[1].innerText.trim(), c[2].innerText.trim(), c[3].innerText.trim(), c[4].querySelector('.ui-pill').innerText.trim(), c[4].innerText.replace(c[4].querySelector('.ui-pill').innerText, '').trim(), c[5].innerText.trim()]); });
+            var csv = out.map(function (r) { return r.map(function (v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(','); }).join('\n');
+            var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + csv], {type: 'text/csv'})); a.download = 'staff.csv'; a.click();
+        });
+    })();
 </script>
 <?php require_once __DIR__ . '/../includes/saas_sidebar_toggle.php'; ?>
 </body>

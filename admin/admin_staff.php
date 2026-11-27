@@ -244,6 +244,16 @@ $branches_data = [];
 while($b = $branches_list->fetch_assoc()) $branches_data[] = $b;
 
 $csrf_token = generate_csrf_token();
+$counts = ['active' => 0, 'inactive' => 0, 'disabled' => 0, 'all' => 0, 'wa' => 0];
+$cr = $conn->query("SELECT COALESCE(account_status,'active') st, COUNT(*) n, SUM(msg_active = 1) wa FROM users WHERE role = 'staff' AND company_id = $company_id GROUP BY st");
+while ($cr && ($c = $cr->fetch_assoc())) {
+    $k = in_array($c['st'], ['active', 'inactive', 'disabled'], true) ? $c['st'] : 'active';
+    $counts[$k] += (int) $c['n'];
+    $counts['all'] += (int) $c['n'];
+    if ($k === 'active') {
+        $counts['wa'] += (int) $c['wa'];
+    }
+}
 ?>
 
 <!DOCTYPE html>
@@ -263,44 +273,53 @@ $csrf_token = generate_csrf_token();
         <?php require_once __DIR__ . '/../includes/saas_sidebar_admin.php'; ?>
 
         <div class="col-md-10 main-content">
-            <div class="dashboard-header d-flex justify-content-between align-items-center">
-                <div>
-                    <button class="mobile-toggle me-2" onclick="toggleSidebar()"><i class="bi bi-list fs-4"></i></button>
-                    <span class="fs-4 fw-bold text-dark">Staff Management</span>
-                </div>
-                <button class="btn btn-primary fw-bold" data-bs-toggle="modal" data-bs-target="#addStaffModal">
-                    <i class="bi bi-person-plus-fill"></i> Add New Staff
-                </button>
-            </div>
+            <?php echo ui_hero('Staff Management', 'Manage your organization staff, salaries, and access in one place.', 'bi-people-fill', 'clipboard',
+                '<button class="btn btn-primary fw-bold px-4 py-2" data-bs-toggle="modal" data-bs-target="#addStaffModal"><i class="bi bi-person-plus-fill"></i> Add New Staff</button>'); ?>
 
             <?php if ($message != '') {
                 echo $message;
             } ?>
             <?php if (!employee_lifecycle_ready($conn)): ?>
-            <div class="alert alert-warning fw-bold mb-3">
-                Employee status columns are missing.
-                <a href="../db_update_v7_employee_lifecycle.php" class="alert-link">Run migration</a>
-                or reload this page (auto-install is attempted on load).
-            </div>
+            <div class="alert alert-warning fw-bold mb-3">Employee status columns are missing — run System update (database migrations).</div>
             <?php endif; ?>
-            <div class="alert alert-info small mb-3">
-                <i class="bi bi-shield-check"></i> Employees are <strong>never permanently deleted</strong>. Use status to deactivate; history is preserved.
-            </div>
-            <ul class="nav nav-pills mb-3 flex-wrap gap-1">
-                <li class="nav-item"><a class="nav-link <?php echo $list_filter === 'active' ? 'active' : ''; ?>" href="?filter=active">Active</a></li>
-                <li class="nav-item"><a class="nav-link <?php echo $list_filter === 'inactive' ? 'active' : ''; ?>" href="?filter=inactive">Inactive</a></li>
-                <li class="nav-item"><a class="nav-link <?php echo $list_filter === 'disabled' ? 'active' : ''; ?>" href="?filter=disabled">Disabled</a></li>
-                <li class="nav-item"><a class="nav-link <?php echo $list_filter === 'all' ? 'active' : ''; ?>" href="?filter=all">All</a></li>
-                <li class="nav-item ms-md-auto"><a class="nav-link" href="admin_employee_activity.php"><i class="bi bi-clock-history"></i> Activity log</a></li>
-            </ul>
 
-            <div class="card p-4">
-                <h5 class="fw-bold mb-3"><i class="bi bi-people text-primary"></i> Staff List</h5>
+            <div class="ui-stats">
+                <?php
+                echo ui_stat($counts['all'], 'Total Staff', 'bi-people-fill', 'blue', '?filter=all');
+                echo ui_stat($counts['active'], 'Active', 'bi-person-check-fill', 'green', '?filter=active');
+                echo ui_stat($counts['inactive'], 'Inactive', 'bi-clock-history', 'orange', '?filter=inactive');
+                echo ui_stat($counts['disabled'], 'Disabled', 'bi-person-x-fill', 'red', '?filter=disabled');
+                echo ui_stat($counts['wa'], 'WhatsApp ON', 'bi-whatsapp', 'teal');
+                ?>
+            </div>
+
+            <div class="alert alert-info small mb-3 py-2 alert-dismissible fade show">
+                <i class="bi bi-info-circle"></i> Employees are <strong>never permanently deleted</strong>. Use status to deactivate; history is preserved.
+                <button type="button" class="btn-close py-2" data-bs-dismiss="alert"></button>
+            </div>
+
+            <div class="ui-panel">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                    <div class="ui-tabs">
+                        <a href="?filter=all" class="<?php echo $list_filter === 'all' ? 'on' : ''; ?>">All Staff<span class="cnt"><?php echo $counts['all']; ?></span></a>
+                        <a href="?filter=active" class="<?php echo $list_filter === 'active' ? 'on' : ''; ?>">Active<span class="cnt"><?php echo $counts['active']; ?></span></a>
+                        <a href="?filter=inactive" class="<?php echo $list_filter === 'inactive' ? 'on' : ''; ?>">Inactive<span class="cnt"><?php echo $counts['inactive']; ?></span></a>
+                        <a href="?filter=disabled" class="<?php echo $list_filter === 'disabled' ? 'on' : ''; ?>">Disabled<span class="cnt"><?php echo $counts['disabled']; ?></span></a>
+                    </div>
+                    <a class="btn btn-outline-primary fw-semibold" href="admin_employee_activity.php"><i class="bi bi-clock-history"></i> Activity Log</a>
+                </div>
+                <div class="d-flex flex-wrap gap-2 mb-3">
+                    <div class="ui-search" style="flex:1 1 280px"><i class="bi bi-search"></i><input type="search" id="sSearch" placeholder="Search by name, phone or branch…" value="<?php echo ui_e($_GET['q'] ?? ''); ?>" style="padding-right:.8rem"></div>
+                    <select class="form-select" id="sBranch" style="width:auto"><option value="">All Branches</option><?php foreach ($branches_data as $b): ?><option><?php echo ui_e($b['name']); ?></option><?php endforeach; ?></select>
+                    <select class="form-select" id="sType" style="width:auto"><option value="">All Types</option><option value="hourly">Hourly</option><option value="monthly">Monthly</option></select>
+                    <button class="btn btn-outline-primary fw-semibold" id="sExport" type="button"><i class="bi bi-download"></i> Export</button>
+                </div>
                 <div class="table-responsive">
-                    <table class="table table-hover align-middle text-center border">
-                        <thead class="table-dark">
+                    <table class="ui-table text-center" id="staffTable">
+                        <thead>
                             <tr>
-                                <th>Name & Phone</th>
+                                <th>#</th>
+                                <th class="text-start">Name &amp; Phone</th>
                                 <th>Status</th>
                                 <th>Branch</th>
                                 <th>Join Date</th>
@@ -310,32 +329,32 @@ $csrf_token = generate_csrf_token();
                             </tr>
                         </thead>
                         <tbody>
-                            <?php while($row = $staff_result->fetch_assoc()):
+                            <?php $rowNo = 0; while($row = $staff_result->fetch_assoc()): $rowNo++;
                                 $acctStatus = employee_lifecycle_ready($conn) ? ($row['account_status'] ?? STAFF_STATUS_ACTIVE) : STAFF_STATUS_ACTIVE;
                                 $loginOk = (int)($row['login_allowed'] ?? 1);
                             ?>
-                            <tr>
-                                <td class="text-start ps-3 fw-bold">
-                                    <?php echo htmlspecialchars($row['name']); ?><br>
-                                    <small class="text-muted"><?php echo htmlspecialchars($row['phone_number']); ?></small>
+                            <tr class="s-row" data-branch="<?php echo ui_e($row['branch_name'] ?? ''); ?>" data-type="<?php echo ui_e($row['salary_type']); ?>">
+                                <td><?php echo $rowNo; ?></td>
+                                <td class="text-start"><div class="d-flex align-items-center gap-2"><?php echo ui_avatar((string) $row['name']); ?>
+                                    <div><b><?php echo htmlspecialchars($row['name']); ?></b><div class="small text-muted"><i class="bi bi-whatsapp text-success"></i> <?php echo htmlspecialchars($row['phone_number']); ?></div></div></div>
                                 </td>
                                 <td>
-                                    <span class="badge <?php echo staff_status_badge_class($acctStatus); ?>"><?php echo staff_status_label($acctStatus); ?></span>
+                                    <?php echo $acctStatus === 'active' ? '<span class="ui-pill green">● Active</span>' : ($acctStatus === 'disabled' ? '<span class="ui-pill red">● ' . staff_status_label($acctStatus) . '</span>' : '<span class="ui-pill amber">● ' . staff_status_label($acctStatus) . '</span>'); ?>
                                     <?php if ($loginOk): ?><br><small class="text-success">Login OK</small><?php else: ?><br><small class="text-danger">Login blocked</small><?php endif; ?>
                                     <?php if (!empty($row['last_login_at'])): ?><br><small class="text-muted">Last login: <?php echo date('d M Y H:i', strtotime($row['last_login_at'])); ?></small><?php endif; ?>
                                 </td>
                                 <td>
-                                    <span class="badge bg-info"><?php echo htmlspecialchars($row['branch_name'] ?? 'No Branch'); ?></span>
+                                    <span class="ui-branch-tag"><i class="bi bi-shop"></i><?php echo htmlspecialchars($row['branch_name'] ?? 'No Branch'); ?></span>
                                 </td>
                                 <td>
-                                    <?php echo ($row['join_date']) ? date("d M Y", strtotime($row['join_date'])) : '<span class="text-muted">Not Set</span>'; ?>
+                                    <span class="text-nowrap"><i class="bi bi-calendar3 text-muted me-1"></i><?php echo ($row['join_date']) ? date("d M Y", strtotime($row['join_date'])) : '<span class="text-muted">Not Set</span>'; ?></span>
                                 </td>
                                 <td>
-                                    <span class="badge bg-secondary"><?php echo ucfirst($row['salary_type']); ?></span><br>
+                                    <span class="ui-pill gray mb-1"><?php echo ucfirst($row['salary_type']); ?></span><br>
                                     <span class="text-muted small">Base:</span> ₹<?php echo $row['salary_amount']; ?>
-                                    <?php if ((float) ($row['rate_increment'] ?? 0) > 0): ?><br><span class="badge bg-warning text-dark">+₹<?php echo (float) $row['rate_increment']; ?>/month</span><?php endif; ?>
-                                    <br><span class="badge bg-light text-dark border"><?php echo ['self' => 'Self punch', 'auto' => 'Auto present', 'manual' => 'Manual'][$row['attendance_mode'] ?? 'self'] ?? 'Self punch'; ?></span>
-                                    <span class="badge bg-light text-dark border"><?php echo htmlspecialchars(payroll_weekly_off_label($row)); ?></span>
+                                    <?php if ((float) ($row['rate_increment'] ?? 0) > 0): ?> <span class="ui-pill amber">+₹<?php echo (float) $row['rate_increment']; ?>/month</span><?php endif; ?>
+                                    <br><span class="ui-pill gray mt-1"><?php echo ['self' => 'Self punch', 'auto' => 'Auto present', 'manual' => 'Manual'][$row['attendance_mode'] ?? 'self'] ?? 'Self punch'; ?></span>
+                                    <span class="ui-pill gray mt-1"><?php echo htmlspecialchars(payroll_weekly_off_label($row)); ?></span>
                                     <?php if (!empty($row['custom_hourly_rate'])): ?>
                                         <br><span class="text-success small fw-bold" title="Custom Rate for this month">This Mth: ₹<?php echo $row['custom_hourly_rate']; ?></span>
                                     <?php endif; ?>
@@ -346,7 +365,7 @@ $csrf_token = generate_csrf_token();
                                         <?php echo ($row['msg_active'] == 1) ? 'ON' : 'OFF'; ?>
                                     </a>
                                 </td>
-                                <td class="text-nowrap">
+                                <td class="s-actions">
                                     <button type="button" class="btn btn-sm btn-warning fw-bold mb-1 btn-staff-status"
                                         data-staff-id="<?php echo (int) $row['id']; ?>"
                                         data-staff-name="<?php echo htmlspecialchars($row['name'], ENT_QUOTES, 'UTF-8'); ?>"
@@ -636,6 +655,23 @@ $csrf_token = generate_csrf_token();
             bootstrap.Modal.getOrCreateInstance(document.getElementById('customRateModal')).show();
         });
     });
+</script>
+<script>
+(function () {
+    var q = document.getElementById('sSearch'), br = document.getElementById('sBranch'), ty = document.getElementById('sType');
+    var rows = document.querySelectorAll('#staffTable tr.s-row');
+    function f() { var t = q.value.toLowerCase().trim(); rows.forEach(function (r) {
+        r.style.display = (r.textContent.toLowerCase().indexOf(t) !== -1 && (!br.value || r.dataset.branch === br.value) && (!ty.value || r.dataset.type === ty.value)) ? '' : 'none'; }); }
+    q.addEventListener('input', f); br.addEventListener('change', f); ty.addEventListener('change', f); f();
+    document.getElementById('sExport').addEventListener('click', function () {
+        var out = [['Name', 'Phone', 'Status', 'Branch', 'Join date', 'Salary']];
+        rows.forEach(function (r) { if (r.style.display === 'none') return; var c = r.querySelectorAll('td'); var nm = c[1].querySelector('b');
+            out.push([nm ? nm.innerText : '', c[1].innerText.replace(nm ? nm.innerText : '', '').trim(), c[2].innerText.split('\n')[0].trim(), c[3].innerText.trim(), c[4].innerText.trim(), c[5].innerText.replace(/\s+/g, ' ').trim()]); });
+        var csv = out.map(function (r) { return r.map(function (v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(','); }).join('\n');
+        var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + csv], {type: 'text/csv'})); a.download = 'staff.csv'; a.click();
+    });
+    if (/[?&]add=1/.test(location.search) && window.bootstrap) { bootstrap.Modal.getOrCreateInstance(document.getElementById('addStaffModal')).show(); }
+})();
 </script>
 <?php require_once __DIR__ . '/../includes/saas_sidebar_toggle.php'; ?>
 </body>
