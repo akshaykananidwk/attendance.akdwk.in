@@ -68,7 +68,7 @@ $branches = $conn->query("SELECT id, name FROM branches WHERE company_id = $comp
     <title>Announcements | Smart Attendance</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-    <link rel="stylesheet" href="../assets/saas_theme.css">
+    <link rel="stylesheet" href="../assets/saas_theme.css?v=<?php echo app_asset_version(); ?>">
 </head>
 <body>
 <div class="saas-sidebar-backdrop" id="saasSidebarBackdrop" aria-hidden="true"></div>

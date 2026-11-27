@@ -205,3 +205,11 @@ function app_relative_root(): string
 
     return $rel === '' ? './' : str_repeat('../', substr_count($rel, '/') + 1);
 }
+
+/** Cache-busting version for CSS/JS links (changes whenever the file changes, e.g. after an update). */
+function app_asset_version(string $rel = 'assets/saas_theme.css'): string
+{
+    $f = APP_ROOT . '/' . ltrim($rel, '/');
+
+    return is_file($f) ? substr(md5((string) filemtime($f) . filesize($f)), 0, 10) : '1';
+}
