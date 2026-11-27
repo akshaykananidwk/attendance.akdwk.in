@@ -1,0 +1,5 @@
+# Uploaded files may never be executed as scripts
+Options -Indexes -ExecCGI
+<FilesMatch "\.(php\d?|phtml|phar|pl|py|cgi|sh|asp|aspx|jsp|shtml)$">
+    Require all denied
+</FilesMatch>

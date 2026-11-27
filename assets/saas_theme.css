@@ -1,0 +1,360 @@
+/**
+ * Smart Attendance — unified SaaS shell (sidebar, surfaces, cards, mobile drawer)
+ * Load after Bootstrap 5.3.
+ */
+:root {
+    --saas-primary: #128c7e;
+    --saas-primary-dark: #075e54;
+    --saas-accent: #25d366;
+    --saas-surface: #f0f2f5;
+    --saas-surface-alt: #f4f7f6;
+    --saas-sidebar-w: 260px;
+    --whatsapp-green: var(--saas-primary);
+    --whatsapp-dark: var(--saas-primary-dark);
+    --whatsapp-light: var(--saas-accent);
+}
+
+body {
+    background-color: var(--saas-surface);
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    overflow-x: hidden;
+}
+
+/* ---- Sidebar (slide-over on small screens) ---- */
+.sidebar {
+    background: linear-gradient(180deg, var(--saas-primary) 0%, #0a5c52 55%, var(--saas-primary-dark) 100%);
+    min-height: 100vh;
+    color: #fff;
+    padding: 0 0 1.5rem;
+    transition: left 0.28s ease, box-shadow 0.28s ease;
+    position: fixed;
+    width: var(--saas-sidebar-w);
+    max-width: 88vw;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.12);
+}
+
+.sidebar .saas-sidebar-brand {
+    text-align: center;
+    font-weight: 700;
+    padding: 1.25rem 1rem 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    margin-bottom: 0.5rem;
+}
+
+.sidebar .saas-sidebar-brand i {
+    font-size: 1.35rem;
+    vertical-align: middle;
+}
+
+.sidebar .saas-nav-section-label {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: rgba(255, 255, 255, 0.42);
+    padding: 1rem 1.25rem 0.35rem;
+    font-weight: 700;
+}
+
+.sidebar a {
+    color: rgba(255, 255, 255, 0.88);
+    text-decoration: none;
+    padding: 0.65rem 1.15rem;
+    display: flex;
+    align-items: center;
+    font-size: 0.95rem;
+    border-left: 3px solid transparent;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.sidebar a:hover,
+.sidebar a.active {
+    background: rgba(255, 255, 255, 0.1);
+    border-left-color: var(--saas-accent);
+    color: #fff;
+}
+
+.sidebar a.active {
+    background: rgba(0, 0, 0, 0.15);
+    font-weight: 600;
+}
+
+.sidebar a i {
+    margin-right: 0.65rem;
+    font-size: 1.1rem;
+    opacity: 0.95;
+}
+
+.sidebar a.text-danger {
+    color: #ffb4b4 !important;
+}
+
+.sidebar a.text-danger:hover {
+    color: #fff !important;
+    background: rgba(220, 53, 69, 0.25);
+    border-left-color: #dc3545;
+}
+
+.sidebar .saas-sidebar-scroll {
+    max-height: calc(100vh - 5.5rem);
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-bottom: 1rem;
+}
+
+.sidebar .saas-sidebar-scroll::-webkit-scrollbar {
+    width: 6px;
+}
+
+.sidebar .saas-sidebar-scroll::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+}
+
+/* ---- Main column ---- */
+.main-content {
+    margin-left: var(--saas-sidebar-w);
+    padding: 1.35rem 1.5rem 2rem;
+    transition: margin 0.28s ease;
+    width: calc(100% - var(--saas-sidebar-w));
+    min-height: 100vh;
+}
+
+.dashboard-header {
+    background-color: #fff;
+    padding: 0.9rem 1.25rem;
+    border-radius: 14px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+    margin-bottom: 1.35rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.card {
+    border-radius: 14px;
+    border: none;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+}
+
+.mobile-toggle {
+    display: none;
+    background-color: var(--saas-primary);
+    color: #fff;
+    border: none;
+    padding: 0.45rem 0.65rem;
+    border-radius: 10px;
+    align-items: center;
+    justify-content: center;
+}
+
+.mobile-toggle:hover {
+    background-color: var(--saas-primary-dark);
+    color: #fff;
+}
+
+/* Mobile drawer + dim overlay */
+.saas-sidebar-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(7, 40, 36, 0.5);
+    z-index: 999;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+}
+
+.saas-sidebar-backdrop.saas-backdrop-visible {
+    display: block;
+    opacity: 1;
+}
+
+@media (max-width: 768px) {
+    .sidebar {
+        left: calc(-1 * var(--saas-sidebar-w) - 8px);
+        box-shadow: none;
+    }
+
+    .sidebar.active {
+        left: 0;
+        box-shadow: 8px 0 32px rgba(0, 0, 0, 0.25);
+    }
+
+    .main-content {
+        margin-left: 0;
+        width: 100%;
+        padding: 1rem 0.85rem 1.5rem;
+    }
+
+    .mobile-toggle {
+        display: inline-flex !important;
+    }
+
+    .hide-mobile {
+        display: none !important;
+    }
+}
+
+/* Staff tasks page */
+.task-card {
+    border-radius: 16px;
+    border: none;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    margin-bottom: 1.25rem;
+    background: #fff;
+    overflow: hidden;
+}
+
+.task-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+}
+
+.priority-High {
+    border-top: 5px solid #dc3545;
+}
+
+.priority-Medium {
+    border-top: 5px solid #ffc107;
+}
+
+.priority-Low {
+    border-top: 5px solid #0dcaf0;
+}
+
+.btn-start {
+    background: var(--saas-primary);
+    color: #fff;
+    border: none;
+    font-weight: 700;
+}
+
+.btn-start:hover {
+    background: var(--saas-primary-dark);
+    color: #fff;
+}
+
+.status-badge {
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+}
+
+.badge-priority-High {
+    background-color: #dc3545;
+    color: #fff;
+}
+
+.badge-priority-Medium {
+    background-color: #ffc107;
+    color: #000;
+}
+
+.badge-priority-Low {
+    background-color: #0dcaf0;
+    color: #000;
+}
+
+@keyframes saas-pulse {
+    0%,
+    100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.55;
+    }
+}
+
+.animate-pulse {
+    animation: saas-pulse 1.2s ease-in-out infinite;
+}
+
+/* Salary slip (admin) */
+.slip-container {
+    max-width: 800px;
+    margin: 20px auto;
+    background: #fff;
+    padding: 40px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+}
+
+.slip-header {
+    border-bottom: 2px solid var(--saas-primary);
+    padding-bottom: 15px;
+    margin-bottom: 25px;
+}
+
+.slip-table th {
+    background-color: #f8f9fa !important;
+    font-weight: bold;
+}
+
+.star-rating {
+    color: #ffc107;
+    font-size: 1.2rem;
+}
+
+.history-card {
+    border-radius: 12px;
+    border: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    margin-bottom: 15px;
+    background: #fff;
+}
+
+.leave-request-card {
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.total-days-box {
+    background-color: #e8f5e9;
+    border: 1px dashed var(--saas-accent);
+    border-radius: 10px;
+    padding: 15px;
+    text-align: center;
+}
+
+@media print {
+    .sidebar,
+    .saas-sidebar-backdrop,
+    .mobile-toggle,
+    .mobile-toggle-btn,
+    .filter-section,
+    .d-print-none,
+    .dashboard-header {
+        display: none !important;
+    }
+
+    .main-content {
+        margin-left: 0 !important;
+        width: 100% !important;
+        padding: 0 !important;
+    }
+
+    .card {
+        box-shadow: none !important;
+        border: 1px solid #ddd !important;
+    }
+
+    body {
+        background: #fff !important;
+    }
+
+    .slip-container {
+        border: none !important;
+        margin: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        box-shadow: none !important;
+        padding: 20px !important;
+    }
+}

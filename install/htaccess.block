@@ -1,0 +1,22 @@
+# BEGIN AKDWK
+# Managed by the AKDWK installer/updater — edit outside this block only.
+Options -Indexes
+DirectoryIndex index.php index.html
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    # Internal folders are never served over HTTP
+    RewriteRule ^(storage|database|includes|_backups|\.git|\.github|tests)(/|$) - [F,L]
+</IfModule>
+
+# Secrets, dumps, logs and dot-files
+<FilesMatch "(^\.env.*|^config\.local\.php$|^config\.php$|^config\.local\.example\.php$|\.(sql|gz|log|bak|old|swp|lock|ini|sh|md|dist)$|^webhook_log\.txt$|^composer\.(json|lock)$|^\.git.*)">
+    Require all denied
+</FilesMatch>
+
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+# END AKDWK

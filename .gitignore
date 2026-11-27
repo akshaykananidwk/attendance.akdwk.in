@@ -1,0 +1,25 @@
+# Secrets / server-local config (never in git, never overwritten by the updater)
+config.local.php
+config.php
+.env
+.env.*
+api/v1/config.local.php
+
+# Runtime data
+uploads/*
+!uploads/.htaccess
+storage/*
+!storage/.htaccess
+!storage/index.html
+_backups/
+webhook_log.txt
+error_log
+*.sql
+*.sql.gz
+!database/schema/*.sql
+!database/migrations/*.sql
+
+# Editors
+.idea/
+.vscode/
+mobile/

@@ -1,0 +1,466 @@
+<?php
+/**
+ * One-click installer: /install
+ *
+ *  1. Server requirements check
+ *  2. Database connection (creates the database if allowed) + detects fresh / existing / restore mode
+ *  3. Company, branch and admin account (+ optional GitHub auto-update settings)
+ *  4. Writes config.local.php, runs all migrations, seeds data, secures folders, locks the installer
+ *
+ * After success storage/installed.lock exists and this installer refuses to run again.
+ */
+define('APP_INSTALLER', true);
+require_once dirname(__DIR__) . '/includes/app_config.php';
+require_once dirname(__DIR__) . '/includes/updater/UpdateManager.php';
+
+date_default_timezone_set('Asia/Kolkata');
+mysqli_report(MYSQLI_REPORT_OFF);
+ini_set('display_errors', '0');
+header('X-Frame-Options: DENY');
+header('X-Content-Type-Options: nosniff');
+header('Cache-Control: no-store');
+session_name('akdwk_install');
+session_start();
+
+function h($s): string
+{
+    return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
+}
+
+$showFinish = ((int) ($_GET['step'] ?? 0)) === 4 && !empty($_SESSION['ins_log']);
+if (app_is_installed() && !$showFinish) {
+    http_response_code(403);
+    page_header('Already installed');
+    echo '<div class="alert alert-success"><b>Application is already installed.</b> The installer is locked.</div>
+          <a class="btn btn-primary" href="../login.php">Go to login</a>
+          <p class="small text-muted mt-3">To reinstall, delete <code>storage/installed.lock</code> on the server (this does not delete data).</p>';
+    page_footer();
+    exit;
+}
+
+if (empty($_SESSION['ins_csrf'])) {
+    $_SESSION['ins_csrf'] = bin2hex(random_bytes(32));
+}
+$csrf = $_SESSION['ins_csrf'];
+$step = (int) ($_GET['step'] ?? 1);
+$errors = [];
+
+/* ---------------------------------------------------------------- helpers */
+
+function requirements(): array
+{
+    $root = APP_ROOT;
+    $req = [
+        ['PHP version ≥ 8.0', PHP_VERSION_ID >= 80000, PHP_VERSION, true],
+        ['mysqli extension', extension_loaded('mysqli'), '', true],
+        ['zip extension (ZipArchive)', class_exists('ZipArchive'), '', true],
+        ['curl extension', function_exists('curl_init'), '', true],
+        ['json extension', function_exists('json_encode'), '', true],
+        ['mbstring extension', extension_loaded('mbstring'), '', true],
+        ['zlib (gzip backups)', function_exists('gzopen'), '', true],
+        ['sodium or openssl (token encryption)', function_exists('sodium_crypto_secretbox') || function_exists('openssl_encrypt'), '', true],
+        ['Site folder writable (config + updates)', is_writable($root), $root, true],
+        ['storage/ writable', is_dir($root . '/storage') ? is_writable($root . '/storage') : is_writable($root), '', true],
+        ['uploads/ writable', is_dir($root . '/uploads') ? is_writable($root . '/uploads') : is_writable($root), '', true],
+        ['gd extension (images)', extension_loaded('gd'), 'recommended', false],
+        ['OPcache', function_exists('opcache_get_status'), 'recommended', false],
+        ['exec() for PHP syntax check during updates', function_exists('exec') && !in_array('exec', array_map('trim', explode(',', (string) ini_get('disable_functions'))), true), 'optional', false],
+    ];
+
+    return $req;
+}
+
+function db_connect(array $d, bool $withDb = true): mysqli
+{
+    $c = @new mysqli($d['db_host'], $d['db_user'], $d['db_pass'], $withDb ? $d['db_name'] : null, (int) $d['db_port']);
+    if ($c->connect_error) {
+        throw new RuntimeException('Cannot connect: ' . $c->connect_error);
+    }
+    $c->set_charset('utf8mb4');
+
+    return $c;
+}
+
+/** fresh | existing | foreign */
+function detect_mode(mysqli $c): array
+{
+    $tables = [];
+    $r = $c->query('SHOW TABLES');
+    while ($r && ($row = $r->fetch_row())) {
+        $tables[] = $row[0];
+    }
+    if (!$tables) {
+        return ['fresh', 0, 0];
+    }
+    if (in_array('users', $tables, true) && in_array('attendance_logs', $tables, true)) {
+        $hasPhone = $c->query("SHOW COLUMNS FROM users LIKE 'phone_number'");
+        if ($hasPhone && $hasPhone->num_rows > 0) {
+            $users = (int) $c->query('SELECT COUNT(*) FROM users')->fetch_row()[0];
+            $admins = (int) $c->query("SELECT COUNT(*) FROM users WHERE role = 'admin'")->fetch_row()[0];
+
+            return ['existing', $users, $admins];
+        }
+    }
+
+    return ['foreign', count($tables), 0];
+}
+
+function write_config(array $d): void
+{
+    $file = APP_ROOT . '/config.local.php';
+    $existing = is_readable($file) ? (include $file) : [];
+    $cfg = array_merge(is_array($existing) ? $existing : [], [
+        'db_host' => $d['db_host'],
+        'db_port' => (int) $d['db_port'],
+        'db_user' => $d['db_user'],
+        'db_pass' => $d['db_pass'],
+        'db_name' => $d['db_name'],
+        'app_url' => $d['app_url'] ?? '',
+    ]);
+    if (empty($cfg['backup_token'])) {
+        $cfg['backup_token'] = bin2hex(random_bytes(20));
+    }
+    $php = "<?php\n// Generated by /install on " . date('c') . ". Server-local secrets — never commit, never overwritten by updates.\nreturn " . var_export($cfg, true) . ";\n";
+    $tmp = $file . '.tmp-' . bin2hex(random_bytes(3));
+    if (@file_put_contents($tmp, $php, LOCK_EX) === false || !@rename($tmp, $file)) {
+        @unlink($tmp);
+        throw new RuntimeException('Cannot write config.local.php — make the site folder writable.');
+    }
+    @chmod($file, 0640);
+    app_config(true);
+}
+
+function page_header(string $title): void
+{
+    echo '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>' . h($title) . ' · Installer</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <style>body{background:#f1f5f9}.wrap{max-width:760px;margin:32px auto;padding:0 16px}.steps span{font-size:.8rem}.steps .on{font-weight:700;color:#4f46e5}</style>
+    </head><body><div class="wrap"><div class="card shadow-sm"><div class="card-body p-4">
+    <h3 class="mb-1"><i class="bi bi-box-seam text-primary"></i> Smart Attendance — Installer</h3><h6 class="text-muted mb-4">' . h($title) . '</h6>';
+}
+
+function page_footer(): void
+{
+    echo '</div></div><p class="text-center small text-muted mt-3">AKDWK Smart Attendance · v' . h(app_version_info()['version']) . '</p></div></body></html>';
+}
+
+function steps_bar(int $cur): void
+{
+    $names = [1 => 'Requirements', 2 => 'Database', 3 => 'Admin & settings', 4 => 'Finish'];
+    echo '<div class="steps d-flex gap-3 mb-4 border-bottom pb-2">';
+    foreach ($names as $i => $n) {
+        echo '<span class="' . ($i === $cur ? 'on' : 'text-muted') . '">' . $i . '. ' . h($n) . '</span>';
+    }
+    echo '</div>';
+}
+
+function check_csrf(): void
+{
+    if (!hash_equals((string) ($_SESSION['ins_csrf'] ?? ''), (string) ($_POST['csrf'] ?? ''))) {
+        throw new RuntimeException('Security token expired — reload the page.');
+    }
+}
+
+/* ---------------------------------------------------------------- POST handling */
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    try {
+        check_csrf();
+        if ($step === 2) {
+            $d = [
+                'db_host' => trim((string) ($_POST['db_host'] ?? 'localhost')) ?: 'localhost',
+                'db_port' => (int) ($_POST['db_port'] ?? 3306) ?: 3306,
+                'db_name' => trim((string) ($_POST['db_name'] ?? '')),
+                'db_user' => trim((string) ($_POST['db_user'] ?? '')),
+                'db_pass' => (string) ($_POST['db_pass'] ?? ''),
+            ];
+            if (!preg_match('/^[A-Za-z0-9_\-$]{1,64}$/', $d['db_name'])) {
+                throw new RuntimeException('Database name may contain only letters, numbers, _ - $');
+            }
+            if ($d['db_user'] === '') {
+                throw new RuntimeException('Database user is required.');
+            }
+            try {
+                $c = db_connect($d);
+            } catch (RuntimeException $e) {
+                if (!empty($_POST['create_db'])) {
+                    $c0 = db_connect($d, false);
+                    if (!$c0->query('CREATE DATABASE IF NOT EXISTS `' . $d['db_name'] . '` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci')) {
+                        throw new RuntimeException('Database does not exist and could not be created: ' . $c0->error . ' — create it in cPanel → MySQL Databases.');
+                    }
+                    $c = db_connect($d);
+                } else {
+                    throw $e;
+                }
+            }
+            [$mode, $n1, $n2] = detect_mode($c);
+            if ($mode === 'foreign') {
+                throw new RuntimeException("This database already contains $n1 table(s) from a different application (e.g. tenants/migrations). Use a new, empty database — nothing was changed.");
+            }
+            $_SESSION['ins_db'] = $d;
+            $_SESSION['ins_mode'] = $mode;
+            $_SESSION['ins_counts'] = [$n1, $n2];
+            header('Location: ?step=3');
+            exit;
+        }
+        if ($step === 3) {
+            if (empty($_SESSION['ins_db'])) {
+                header('Location: ?step=2');
+                exit;
+            }
+            $d = $_SESSION['ins_db'];
+            $mode = $_SESSION['ins_mode'];
+            $restoreFile = null;
+            if ($mode === 'fresh' && !empty($_FILES['restore_sql']['tmp_name']) && is_uploaded_file($_FILES['restore_sql']['tmp_name'])) {
+                $restoreFile = $_FILES['restore_sql']['tmp_name'];
+                if ($_FILES['restore_sql']['size'] > 200 * 1024 * 1024) {
+                    throw new RuntimeException('SQL file too large (max 200 MB).');
+                }
+            }
+            $needAdmin = $mode === 'fresh' && $restoreFile === null;
+            $company = trim((string) ($_POST['company'] ?? ''));
+            $branch = trim((string) ($_POST['branch'] ?? '')) ?: 'Main Branch';
+            $aName = trim((string) ($_POST['admin_name'] ?? ''));
+            $aPhone = preg_replace('/\D/', '', (string) ($_POST['admin_phone'] ?? ''));
+            $aPass = (string) ($_POST['admin_pass'] ?? '');
+            $wantAdmin = $needAdmin || ($aPhone !== '' || $aPass !== '');
+            if ($wantAdmin) {
+                if ($needAdmin && $company === '') {
+                    throw new RuntimeException('Company name is required.');
+                }
+                if ($aName === '' || strlen($aPhone) < 10) {
+                    throw new RuntimeException('Admin name and a 10+ digit mobile number are required.');
+                }
+                if (strlen($aPass) < 8 || !preg_match('/[A-Za-z]/', $aPass) || !preg_match('/\d/', $aPass)) {
+                    throw new RuntimeException('Admin password must be at least 8 characters with letters and numbers.');
+                }
+                if ($aPass !== (string) ($_POST['admin_pass2'] ?? '')) {
+                    throw new RuntimeException('Passwords do not match.');
+                }
+            }
+            $appUrl = rtrim(trim((string) ($_POST['app_url'] ?? '')), '/');
+            if ($appUrl !== '' && !preg_match('#^https?://#i', $appUrl)) {
+                throw new RuntimeException('Site URL must start with http:// or https://');
+            }
+
+            /* ---- run installation ---- */
+            $log = [];
+            $c = db_connect($d);
+            app_ensure_storage();
+            foreach (['uploads', 'uploads/tasks', 'uploads/leaves', 'storage/backups', 'storage/logs', 'storage/updates', 'storage/cache'] as $dir) {
+                if (!is_dir(APP_ROOT . '/' . $dir)) {
+                    @mkdir(APP_ROOT . '/' . $dir, 0775, true);
+                }
+            }
+            app_key();
+            $log[] = 'Storage folders ready, application key generated';
+
+            if ($mode === 'existing') {
+                $bk = 'db-' . date('Ymd-His') . '-preinstall.sql.gz';
+                (new DbBackup($c))->dump(APP_STORAGE . '/backups/' . $bk);
+                $log[] = "Existing database backed up → storage/backups/$bk";
+            }
+            if ($restoreFile !== null) {
+                $sql = DbBackup::read($restoreFile);
+                $c->query('SET FOREIGN_KEY_CHECKS=0');
+                $n = SqlSplitter::run($c, $sql);
+                $c->query('SET FOREIGN_KEY_CHECKS=1');
+                $log[] = "Restored uploaded SQL backup ($n statements)";
+                [$m2] = detect_mode($c);
+                if ($m2 !== 'existing') {
+                    throw new RuntimeException('The uploaded SQL file is not a Smart Attendance backup (users / attendance_logs tables missing).');
+                }
+            }
+
+            write_config($d + ['app_url' => $appUrl]);
+            $log[] = 'config.local.php written';
+
+            $done = (new MigrationRunner($c))->migrate(function (string $l) use (&$log) {
+                $log[] = $l;
+            });
+            $log[] = count($done) . ' migration(s) applied';
+
+            if ($wantAdmin) {
+                $cid = (int) ($c->query('SELECT id FROM companies ORDER BY id LIMIT 1')->fetch_row()[0] ?? 0);
+                if ($cid === 0) {
+                    $stmt = $c->prepare('INSERT INTO companies (name) VALUES (?)');
+                    $stmt->bind_param('s', $company);
+                    $stmt->execute();
+                    $cid = (int) $stmt->insert_id;
+                    $log[] = "Company created: $company";
+                }
+                $bid = (int) ($c->query('SELECT id FROM branches WHERE company_id = ' . $cid . ' ORDER BY id LIMIT 1')->fetch_row()[0] ?? 0);
+                if ($bid === 0) {
+                    $stmt = $c->prepare('INSERT INTO branches (company_id, name) VALUES (?, ?)');
+                    $stmt->bind_param('is', $cid, $branch);
+                    $stmt->execute();
+                    $bid = (int) $stmt->insert_id;
+                    $log[] = "Branch created: $branch";
+                }
+                $hash = password_hash($aPass, PASSWORD_DEFAULT);
+                $stmt = $c->prepare('SELECT id FROM users WHERE phone_number = ? LIMIT 1');
+                $stmt->bind_param('s', $aPhone);
+                $stmt->execute();
+                $exists = $stmt->get_result()->fetch_row();
+                if ($exists) {
+                    $uid = (int) $exists[0];
+                    $stmt = $c->prepare("UPDATE users SET name = ?, password = ?, role = 'admin', account_status = 'active', login_allowed = 1 WHERE id = ?");
+                    $stmt->bind_param('ssi', $aName, $hash, $uid);
+                    $stmt->execute();
+                    $log[] = "Existing user $aPhone promoted to admin with the new password";
+                } else {
+                    $today = date('Y-m-d');
+                    $stmt = $c->prepare("INSERT INTO users (company_id, branch_id, name, phone_number, password, role, salary_type, salary_amount, join_date, account_status, login_allowed) VALUES (?, ?, ?, ?, ?, 'admin', 'monthly', 0, ?, 'active', 1)");
+                    $stmt->bind_param('iissss', $cid, $bid, $aName, $aPhone, $hash, $today);
+                    $stmt->execute();
+                    $log[] = "Admin account created: $aName ($aPhone)";
+                }
+            }
+            $hasSettings = (int) $c->query('SELECT COUNT(*) FROM settings')->fetch_row()[0];
+            if ($hasSettings === 0) {
+                $wh = ($appUrl ?: '') . '/webhook.php';
+                $stmt = $c->prepare("INSERT INTO settings (group_id, api_key, session_id, webhook_url, admin_mobile) VALUES ('', '', '', ?, ?)");
+                $stmt->bind_param('ss', $wh, $aPhone);
+                $stmt->execute();
+                $log[] = 'Default settings row created (configure WhatsApp in Admin → Settings)';
+            }
+
+            // Optional auto-update settings
+            $um = new UpdateManager($c);
+            $repoIn = trim((string) ($_POST['gh_repo'] ?? ''));
+            if ($repoIn !== '') {
+                if (preg_match('#github\.com[/:]([^/]+)/([^/\s]+?)(?:\.git)?/?$#i', $repoIn, $m)) {
+                    $repoIn = $m[1] . '/' . $m[2];
+                }
+                [$o, $r] = array_pad(explode('/', $repoIn, 2), 2, '');
+                try {
+                    $um->saveSettings($o, $r, (string) ($_POST['gh_branch'] ?? 'main'), (string) ($_POST['gh_token'] ?? '') ?: null, $appUrl, '', 5, true, 0);
+                    $log[] = "GitHub auto-update connected: $o/$r";
+                } catch (Throwable $e) {
+                    $log[] = '⚠ GitHub settings not saved (' . $e->getMessage() . ') — set them later in Admin → System update';
+                }
+            }
+
+            // Security: root .htaccess block + protected folders
+            UpdateManager::writeHtaccessBlock(APP_ROOT . '/.htaccess', (string) file_get_contents(__DIR__ . '/htaccess.block'));
+            if (!is_file(APP_ROOT . '/uploads/.htaccess')) {
+                @file_put_contents(APP_ROOT . '/uploads/.htaccess', "Options -Indexes -ExecCGI\n<FilesMatch \"\\.(php\\d?|phtml|phar|pl|py|cgi|sh)$\">\n    Require all denied\n</FilesMatch>\n");
+            }
+            $log[] = 'Security rules written (.htaccess, storage/, uploads/)';
+
+            // Version state + manifest of current files (lets future updates delete removed files safely)
+            if (!is_file(APP_STORAGE . '/version.json')) {
+                $vi = app_version_info();
+                file_put_contents(APP_STORAGE . '/version.json', json_encode(['version' => $vi['version'], 'commit' => '', 'branch' => '', 'updated_at' => date('c')], JSON_PRETTY_PRINT));
+            }
+            file_put_contents(APP_STORAGE . '/installed.lock', json_encode(['installed_at' => date('c'), 'mode' => $restoreFile ? 'restore' : $mode]));
+            $log[] = 'Installer locked (storage/installed.lock)';
+
+            $_SESSION['ins_log'] = $log;
+            unset($_SESSION['ins_db']);
+            header('Location: ?step=4');
+            exit;
+        }
+    } catch (Throwable $e) {
+        $errors[] = $e->getMessage();
+    }
+}
+
+/* ---------------------------------------------------------------- pages */
+
+$titles = [1 => 'Server requirements', 2 => 'Database connection', 3 => 'Admin & settings', 4 => 'Finished'];
+page_header($titles[$step] ?? 'Install');
+steps_bar($step);
+foreach ($errors as $e) {
+    echo '<div class="alert alert-danger"><i class="bi bi-x-octagon-fill"></i> ' . nl2br(h($e)) . '</div>';
+}
+
+if ($step === 1) {
+    $allOk = true;
+    echo '<table class="table table-sm align-middle">';
+    foreach (requirements() as [$name, $ok, $info, $required]) {
+        $allOk = $allOk && ($ok || !$required);
+        $icon = $ok ? '<i class="bi bi-check-circle-fill text-success"></i>' : ($required ? '<i class="bi bi-x-circle-fill text-danger"></i>' : '<i class="bi bi-exclamation-circle-fill text-warning"></i>');
+        echo "<tr><td>$icon " . h($name) . '</td><td class="small text-muted text-end">' . h($info) . '</td></tr>';
+    }
+    echo '</table>';
+    echo $allOk
+        ? '<a class="btn btn-primary" href="?step=2">Continue <i class="bi bi-arrow-right"></i></a>'
+        : '<div class="alert alert-warning">Fix the red items (cPanel → Select PHP Version / file permissions) and reload.</div><a class="btn btn-outline-secondary" href="?step=1">Re-check</a>';
+} elseif ($step === 2) {
+    $pre = $_SESSION['ins_db'] ?? app_config();
+    ?>
+    <form method="post" action="?step=2" autocomplete="off">
+        <input type="hidden" name="csrf" value="<?php echo h($csrf); ?>">
+        <div class="row g-2">
+            <div class="col-8"><label class="form-label small fw-semibold">Database host</label><input class="form-control" name="db_host" value="<?php echo h($_POST['db_host'] ?? ($pre['db_host'] ?? 'localhost')); ?>"></div>
+            <div class="col-4"><label class="form-label small fw-semibold">Port</label><input class="form-control" name="db_port" value="<?php echo h($_POST['db_port'] ?? ($pre['db_port'] ?? 3306)); ?>"></div>
+            <div class="col-12"><label class="form-label small fw-semibold">Database name</label><input class="form-control" name="db_name" required value="<?php echo h($_POST['db_name'] ?? ($pre['db_name'] ?? '')); ?>"></div>
+            <div class="col-6"><label class="form-label small fw-semibold">Database user</label><input class="form-control" name="db_user" required value="<?php echo h($_POST['db_user'] ?? ($pre['db_user'] ?? '')); ?>"></div>
+            <div class="col-6"><label class="form-label small fw-semibold">Password</label><input class="form-control" type="password" name="db_pass" autocomplete="new-password"></div>
+            <div class="col-12 form-check ms-1 mt-2"><input class="form-check-input" type="checkbox" name="create_db" value="1" id="cdb"><label class="form-check-label small" for="cdb">Create the database if it does not exist (needs CREATE permission; on cPanel create it in “MySQL Databases” first)</label></div>
+        </div>
+        <div class="d-flex justify-content-between mt-3">
+            <a class="btn btn-outline-secondary" href="?step=1">Back</a>
+            <button class="btn btn-primary">Test connection &amp; continue <i class="bi bi-arrow-right"></i></button>
+        </div>
+    </form>
+    <?php
+} elseif ($step === 3) {
+    if (empty($_SESSION['ins_db'])) {
+        echo '<div class="alert alert-warning">Please enter database details first.</div><a class="btn btn-primary" href="?step=2">Database</a>';
+    } else {
+        $mode = $_SESSION['ins_mode'];
+        [$n1, $n2] = $_SESSION['ins_counts'];
+        if ($mode === 'existing') {
+            echo '<div class="alert alert-info"><i class="bi bi-database-check"></i> <b>Existing installation found</b> (' . (int) $n1 . ' users, ' . (int) $n2 . ' admins). Your data is kept: the database is backed up, then only missing tables/columns are added. Admin fields below are optional (fill them to create/reset an admin).</div>';
+        } else {
+            echo '<div class="alert alert-secondary"><i class="bi bi-database-add"></i> <b>Empty database</b> — a fresh installation will be created. Optionally restore an old <code>.sql</code> / <code>.sql.gz</code> backup instead.</div>';
+        }
+        $url = UpdateManager::detectAppUrl();
+        $url = preg_replace('#/install$#', '', $url);
+        ?>
+        <form method="post" action="?step=3" enctype="multipart/form-data" autocomplete="off">
+            <input type="hidden" name="csrf" value="<?php echo h($csrf); ?>">
+            <?php if ($mode === 'fresh'): ?>
+                <div class="mb-3 p-2 border rounded bg-light">
+                    <label class="form-label small fw-semibold">Restore from backup (optional)</label>
+                    <input class="form-control form-control-sm" type="file" name="restore_sql" accept=".sql,.gz">
+                    <div class="form-text">Leave empty for a brand-new installation.</div>
+                </div>
+            <?php endif; ?>
+            <div class="row g-2">
+                <div class="col-6"><label class="form-label small fw-semibold">Company name</label><input class="form-control" name="company" value="<?php echo h($_POST['company'] ?? ''); ?>"></div>
+                <div class="col-6"><label class="form-label small fw-semibold">Branch name</label><input class="form-control" name="branch" value="<?php echo h($_POST['branch'] ?? 'Main Branch'); ?>"></div>
+                <div class="col-6"><label class="form-label small fw-semibold">Admin name</label><input class="form-control" name="admin_name" value="<?php echo h($_POST['admin_name'] ?? ''); ?>"></div>
+                <div class="col-6"><label class="form-label small fw-semibold">Admin mobile (login ID)</label><input class="form-control" name="admin_phone" inputmode="numeric" value="<?php echo h($_POST['admin_phone'] ?? ''); ?>"></div>
+                <div class="col-6"><label class="form-label small fw-semibold">Admin password</label><input class="form-control" type="password" name="admin_pass" autocomplete="new-password"></div>
+                <div class="col-6"><label class="form-label small fw-semibold">Confirm password</label><input class="form-control" type="password" name="admin_pass2" autocomplete="new-password"></div>
+                <div class="col-12"><label class="form-label small fw-semibold">Site URL</label><input class="form-control" name="app_url" value="<?php echo h($_POST['app_url'] ?? $url); ?>"></div>
+            </div>
+            <details class="mt-3"><summary class="fw-semibold small">GitHub auto-update (optional — can be set later in Admin → System update)</summary>
+                <div class="row g-2 mt-1">
+                    <div class="col-8"><input class="form-control form-control-sm" name="gh_repo" placeholder="owner/repository"></div>
+                    <div class="col-4"><input class="form-control form-control-sm" name="gh_branch" placeholder="main" value="main"></div>
+                    <div class="col-12"><input class="form-control form-control-sm" type="password" name="gh_token" placeholder="GitHub token (read-only Contents)" autocomplete="new-password"></div>
+                </div>
+            </details>
+            <div class="d-flex justify-content-between mt-3">
+                <a class="btn btn-outline-secondary" href="?step=2">Back</a>
+                <button class="btn btn-success"><i class="bi bi-rocket-takeoff"></i> Install now</button>
+            </div>
+        </form>
+        <?php
+    }
+} elseif ($step === 4) {
+    echo '<div class="alert alert-success"><b>Installation complete!</b></div><ul class="small">';
+    foreach ($_SESSION['ins_log'] ?? [] as $l) {
+        echo '<li>' . h($l) . '</li>';
+    }
+    echo '</ul><a class="btn btn-primary" href="../login.php">Go to login</a>';
+    echo '<p class="small text-muted mt-3">The installer is now locked. Next: Admin → <b>System update</b> to connect GitHub (if not done above).</p>';
+    unset($_SESSION['ins_log']);
+}
+page_footer();

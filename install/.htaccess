@@ -1,0 +1,4 @@
+# Only the installer page itself is public
+<FilesMatch "^(?!index\.php$).+$">
+    Require all denied
+</FilesMatch>
