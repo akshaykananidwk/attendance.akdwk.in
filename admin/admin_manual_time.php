@@ -191,7 +191,7 @@ $csrf_token = generate_csrf_token();
             <div class="card p-4">
                 <h5 class="fw-bold mb-3"><i class="bi bi-table text-primary"></i> Recent Attendance Records</h5>
                 <div class="table-responsive">
-                    <table class="table table-hover table-bordered text-center align-middle border">
+                    <table class="ui-cards-sm table table-hover table-bordered text-center align-middle border">
                         <thead class="table-dark">
                             <tr>
                                 <th>Date</th>

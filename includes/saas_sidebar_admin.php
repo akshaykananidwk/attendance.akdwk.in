@@ -22,36 +22,33 @@ if ($saas_is_auditor) {
         ],
     ];
 } else {
+    // Daily work first; rarely used pages are grouped under "More" (collapsed).
     $saas_menu = [
-        'Overview' => [
+        'Daily' => [
             ['admin_dashboard.php', 'bi-house-door-fill', 'Dashboard'],
-            ['admin_live_tracking.php', 'bi-geo-alt-fill', 'Live Tracking'],
-        ],
-        'Organization' => [
-            ['admin_branches.php', 'bi-building', 'Branches'],
+            ['admin_live_tracking.php', 'bi-geo-alt-fill', 'Today\'s Attendance'],
             ['admin_staff.php', 'bi-people-fill', 'Staff'],
-            ['admin_employee_activity.php', 'bi-person-badge', 'Staff Activity'],
-            ['admin_clients.php', 'bi-person-vcard', 'Client History'],
-        ],
-        'Operations' => [
-            ['admin_tasks.php', 'bi-list-check', 'Tasks'],
-            ['admin_announcements.php', 'bi-megaphone', 'Announcements'],
-            ['admin_performance.php', 'bi-star-fill', 'Performance'],
-        ],
-        'Time & Payroll' => [
-            ['admin_leaves.php', 'bi-calendar2-check', 'Leave Approvals'],
-            ['admin_manual_time.php', 'bi-clock-history', 'Manual Time'],
             ['admin_advance.php', 'bi-cash-stack', 'Upad &amp; Jama'],
-            ['admin_penalties.php', 'bi-exclamation-octagon', 'Penalties'],
-            ['admin_resignations.php', 'bi-door-open', 'Resignations'],
+            ['admin_manual_time.php', 'bi-clock-history', 'Manual Time'],
+            ['admin_leaves.php', 'bi-calendar2-check', 'Leave Approvals'],
         ],
-        'Salary & Reports' => [
+        'Salary' => [
             ['admin_reports.php', 'bi-bar-chart-line-fill', 'Salary Reports'],
             ['admin_salary_slip.php', 'bi-file-earmark-text-fill', 'Salary Slips'],
             ['admin_payments.php', 'bi-currency-rupee', 'Salary Payments'],
-            ['admin_payroll_rules.php', 'bi-calculator', 'Payroll Rules &amp; Check'],
+            ['admin_penalties.php', 'bi-exclamation-octagon', 'Penalties'],
         ],
-        'Data & System' => [
+        'Work' => [
+            ['admin_tasks.php', 'bi-list-check', 'Tasks'],
+            ['admin_announcements.php', 'bi-megaphone', 'Announcements'],
+            ['admin_clients.php', 'bi-person-vcard', 'Client History'],
+        ],
+        'More' => [
+            ['admin_payroll_rules.php', 'bi-calculator', 'Payroll Rules &amp; Check'],
+            ['admin_branches.php', 'bi-building', 'Branches'],
+            ['admin_employee_activity.php', 'bi-person-badge', 'Staff Activity'],
+            ['admin_performance.php', 'bi-star-fill', 'Performance'],
+            ['admin_resignations.php', 'bi-door-open', 'Resignations'],
             ['admin_exports.php', 'bi-file-earmark-spreadsheet', 'Data Reports'],
             ['admin_audit_log.php', 'bi-journal-text', 'Audit Log'],
             ['admin_settings.php', 'bi-gear-fill', 'Settings'],
@@ -106,19 +103,31 @@ $saas_role_label = ['admin' => 'Super Admin', 'manager' => 'Manager', 'hr' => 'H
         <div><div class="saas-brand-name"><?php echo ui_e(app_brand()); ?></div><div class="saas-brand-sub">HR • Operations • Payroll<?php echo $saas_is_auditor ? ' · Auditor' : ''; ?></div></div>
     </div>
     <div class="saas-sidebar-scroll">
-        <?php foreach ($saas_menu as $section => $items): ?>
+        <?php foreach ($saas_menu as $section => $items):
+            if ($section === 'More'):
+                $open = in_array($saas_cur, array_column($items, 0), true); ?>
+            <details class="saas-more" <?php echo $open ? 'open' : ''; ?>>
+                <summary class="saas-nav-section-label">More <i class="bi bi-chevron-down"></i></summary>
+                <?php foreach ($items as [$h, $i, $l]) { echo $saas_link($h, $i, $l); } ?>
+            </details>
+            <?php else: ?>
             <div class="saas-nav-section-label"><?php echo ui_e($section); ?></div>
-            <?php foreach ($items as [$h, $i, $l]) {
-                echo $saas_link($h, $i, $l);
-            } ?>
-        <?php endforeach; ?>
-        <div class="saas-nav-section-label">Account</div>
-        <?php echo $saas_link('admin_password.php', 'bi-key-fill', 'Change Password'); ?>
-        <a href="../logout.php" class="text-danger fw-bold"><i class="bi bi-box-arrow-left"></i> Logout</a>
+            <?php foreach ($items as [$h, $i, $l]) { echo $saas_link($h, $i, $l); } ?>
+        <?php endif; endforeach; ?>
+        <a href="../logout.php" class="text-danger fw-bold mt-2"><i class="bi bi-box-arrow-left"></i> Logout</a>
     </div>
     <svg class="saas-sidebar-wave" viewBox="0 0 248 70" preserveAspectRatio="none" aria-hidden="true"><path d="M0 40 Q62 10 124 34 T248 26 V70 H0z" fill="#1d4fd8" fill-opacity=".35"/><path d="M0 52 Q70 30 140 50 T248 44 V70 H0z" fill="#2563eb" fill-opacity=".45"/></svg>
 </div>
 
+<?php if (!$saas_is_auditor):
+    $saas_bottom = [['admin_dashboard.php', 'bi-house-door', 'Home'], ['admin_live_tracking.php', 'bi-geo-alt', 'Attendance'], ['admin_advance.php', 'bi-cash-stack', 'Upad'], ['admin_staff.php', 'bi-people', 'Staff'], ['admin_reports.php', 'bi-currency-rupee', 'Salary']]; ?>
+<nav class="ui-bottom-nav d-print-none" aria-label="Quick navigation">
+    <?php foreach ($saas_bottom as [$h, $i, $l]): ?>
+        <a href="<?php echo $h; ?>" class="<?php echo $saas_cur === $h ? 'on' : ''; ?>"><i class="bi <?php echo $i; ?>"></i><span><?php echo $l; ?></span></a>
+    <?php endforeach; ?>
+    <a href="#" onclick="toggleSidebar();return false;"><i class="bi bi-grid"></i><span>More</span></a>
+</nav>
+<?php endif; ?>
 <template id="uiTopbarTpl">
     <div class="ui-topbar d-print-none">
         <button class="ui-icon-btn ui-menu-toggle" type="button" onclick="toggleSidebar()" aria-label="Menu"><i class="bi bi-list"></i></button>

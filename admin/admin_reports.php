@@ -146,7 +146,7 @@ $total_office_expense = $monthly_office_rent + $other_office_expense;
                     Financial Report for <?=date("F Y", mktime(0,0,0,$selected_month, 1, $selected_year))?>
                 </h5>
                 <div class="table-responsive">
-                    <table class="table table-hover table-bordered align-middle text-center border">
+                    <table class="ui-cards-sm table table-hover table-bordered align-middle text-center border">
                         <thead class="table-dark">
                             <tr>
                                 <th>Staff Member</th>

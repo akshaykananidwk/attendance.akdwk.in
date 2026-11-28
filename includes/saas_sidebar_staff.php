@@ -7,25 +7,26 @@ $saas_cur = basename($_SERVER['PHP_SELF'] ?? '');
         <div><div class="saas-brand-name"><?php echo ui_e(app_brand()); ?></div><div class="saas-brand-sub">Staff portal</div></div>
     </div>
     <div class="saas-sidebar-scroll">
-        <div class="saas-nav-section-label">Workspace</div>
-        <a href="staff_dashboard.php" class="<?php echo $saas_cur === 'staff_dashboard.php' ? 'active' : ''; ?>"><i class="bi bi-speedometer2"></i> Dashboard</a>
-
-        <div class="saas-nav-section-label">Work</div>
-        <a href="staff_tasks.php" class="<?php echo $saas_cur === 'staff_tasks.php' ? 'active' : ''; ?>"><i class="bi bi-list-task"></i> My tasks</a>
-        <a href="staff_tasks_history.php" class="<?php echo $saas_cur === 'staff_tasks_history.php' ? 'active' : ''; ?>"><i class="bi bi-clock-history"></i> Work history</a>
-
-        <div class="saas-nav-section-label">Time off</div>
-        <a href="staff_leave.php" class="<?php echo $saas_cur === 'staff_leave.php' ? 'active' : ''; ?>"><i class="bi bi-calendar-event"></i> Request leave</a>
-        <a href="staff_resignation.php" class="<?php echo $saas_cur === 'staff_resignation.php' ? 'active' : ''; ?>"><i class="bi bi-door-open"></i> Resignation</a>
-
-        <div class="saas-nav-section-label">Account</div>
-        <a href="staff_password.php" class="<?php echo $saas_cur === 'staff_password.php' ? 'active' : ''; ?>"><i class="bi bi-key-fill"></i> Change password</a>
-
+        <div class="saas-nav-section-label">Daily</div>
+        <a href="staff_dashboard.php" class="<?php echo $saas_cur === 'staff_dashboard.php' ? 'active' : ''; ?>"><i class="bi bi-house-door-fill"></i> Dashboard</a>
+        <a href="staff_tasks.php" class="<?php echo $saas_cur === 'staff_tasks.php' ? 'active' : ''; ?>"><i class="bi bi-list-check"></i> My Tasks</a>
+        <a href="staff_leave.php" class="<?php echo $saas_cur === 'staff_leave.php' ? 'active' : ''; ?>"><i class="bi bi-calendar-event"></i> Request Leave</a>
+        <a href="staff_tasks_history.php" class="<?php echo $saas_cur === 'staff_tasks_history.php' ? 'active' : ''; ?>"><i class="bi bi-clock-history"></i> Work History</a>
+        <details class="saas-more" <?php echo $saas_cur === 'staff_resignation.php' ? 'open' : ''; ?>>
+            <summary class="saas-nav-section-label">More <i class="bi bi-chevron-down"></i></summary>
+            <a href="staff_resignation.php" class="<?php echo $saas_cur === 'staff_resignation.php' ? 'active' : ''; ?>"><i class="bi bi-door-open"></i> Resignation</a>
+        </details>
         <a href="logout.php" class="text-danger fw-bold"><i class="bi bi-box-arrow-left"></i> Logout</a>
     </div>
     <svg class="saas-sidebar-wave" viewBox="0 0 248 70" preserveAspectRatio="none" aria-hidden="true"><path d="M0 40 Q62 10 124 34 T248 26 V70 H0z" fill="#1d4fd8" fill-opacity=".35"/><path d="M0 52 Q70 30 140 50 T248 44 V70 H0z" fill="#2563eb" fill-opacity=".45"/></svg>
 </div>
 <?php $saas_sname = (string) ($_SESSION['name'] ?? 'Staff'); ?>
+<nav class="ui-bottom-nav d-print-none" aria-label="Quick navigation">
+    <?php foreach ([['staff_dashboard.php', 'bi-house-door', 'Home'], ['staff_tasks.php', 'bi-list-check', 'Tasks'], ['staff_leave.php', 'bi-calendar-event', 'Leave'], ['staff_tasks_history.php', 'bi-clock-history', 'History']] as [$h, $i, $l]): ?>
+        <a href="<?php echo $h; ?>" class="<?php echo $saas_cur === $h ? 'on' : ''; ?>"><i class="bi <?php echo $i; ?>"></i><span><?php echo $l; ?></span></a>
+    <?php endforeach; ?>
+    <a href="#" onclick="toggleSidebar();return false;"><i class="bi bi-grid"></i><span>More</span></a>
+</nav>
 <template id="uiTopbarTpl">
     <div class="ui-topbar d-print-none">
         <button class="ui-icon-btn ui-menu-toggle" type="button" onclick="toggleSidebar()" aria-label="Menu"><i class="bi bi-list"></i></button>

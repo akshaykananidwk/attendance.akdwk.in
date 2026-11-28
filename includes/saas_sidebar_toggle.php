@@ -33,3 +33,22 @@
     });
 })();
 </script>
+<script>
+/* Mobile: tables marked .ui-cards-sm show each row as a card, with column names from the header. */
+(function () {
+    function label() {
+        document.querySelectorAll('table.ui-cards-sm').forEach(function (t) {
+            var heads = Array.prototype.map.call(t.querySelectorAll('thead th'), function (th) { return th.innerText.trim(); });
+            t.querySelectorAll('tbody tr').forEach(function (tr) {
+                var i = 0;
+                Array.prototype.forEach.call(tr.children, function (td) {
+                    var span = parseInt(td.getAttribute('colspan') || '1', 10);
+                    if (!td.hasAttribute('data-label') && heads[i] && span === 1) td.setAttribute('data-label', heads[i]);
+                    i += span;
+                });
+            });
+        });
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', label); else label();
+})();
+</script>

@@ -137,7 +137,7 @@ $csrf = generate_csrf_token();
             <div class="card p-4 border-0 shadow-sm">
                 <h5 class="fw-bold mb-3">Pending Requests</h5>
                 <div class="table-responsive">
-                    <table class="table table-hover align-middle">
+                    <table class="ui-cards-sm table table-hover align-middle">
                         <thead class="table-light">
                             <tr>
                                 <th>Applied At</th>
@@ -192,7 +192,7 @@ $csrf = generate_csrf_token();
             <div class="card p-4 border-0 shadow-sm mt-4">
                 <h5 class="fw-bold mb-3">Processed Requests</h5>
                 <div class="table-responsive">
-                    <table class="table table-hover align-middle">
+                    <table class="ui-cards-sm table table-hover align-middle">
                         <thead class="table-light">
                             <tr>
                                 <th>Staff</th>

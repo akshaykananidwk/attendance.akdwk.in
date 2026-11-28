@@ -315,7 +315,7 @@ while ($cr && ($c = $cr->fetch_assoc())) {
                     <button class="btn btn-outline-primary fw-semibold" id="sExport" type="button"><i class="bi bi-download"></i> Export</button>
                 </div>
                 <div class="table-responsive">
-                    <table class="ui-table text-center" id="staffTable">
+                    <table class="ui-table text-center ui-cards-sm" id="staffTable">
                         <thead>
                             <tr>
                                 <th>#</th>

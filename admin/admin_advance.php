@@ -156,7 +156,7 @@ $csrf_token = generate_csrf_token();
             <div class="card p-4">
                 <h5 class="fw-bold mb-3"><i class="bi bi-history text-warning"></i> Transaction History</h5>
                 <div class="table-responsive">
-                    <table class="table table-hover align-middle text-center border">
+                    <table class="ui-cards-sm table table-hover align-middle text-center border">
                         <thead class="table-dark">
                             <tr>
                                 <th>Date</th>

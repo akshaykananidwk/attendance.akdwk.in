@@ -98,7 +98,7 @@ $t = static fn ($v) => $v ? date('h:i A', strtotime((string) $v)) : '';
                     </div>
                 </div>
                 <div class="table-responsive">
-                    <table class="ui-table text-center">
+                    <table class="ui-table text-center ui-cards-sm">
                         <thead><tr><th>#</th><th class="text-start">Staff Member</th><th>In</th><th>Lunch Out</th><th>Lunch In</th><th>Out</th><th>Total Work</th><th>Status</th><th>Actions</th></tr></thead>
                         <tbody>
                         <?php if (!$rows): ?><tr><td colspan="9" class="text-muted py-4">No active staff.</td></tr><?php endif; ?>

@@ -131,7 +131,7 @@ $payments = $conn->query("SELECT p.*, u.name FROM salary_payments p JOIN users u
         <div class="col-md-8">
             <h5 class="fw-bold mb-3"><i class="bi bi-clock-history"></i> Recent Payout History</h5>
             <div class="card p-0 overflow-hidden">
-                <table class="table table-hover align-middle m-0">
+                <table class="ui-cards-sm table table-hover align-middle m-0">
                     <thead class="table-dark">
                         <tr>
                             <th>Date</th>

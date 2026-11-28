@@ -143,6 +143,15 @@ $pct = static fn (int $n) => $total_staff > 0 ? round($n * 100 / $total_staff) :
                 '<span class="ui-chip ui-hide-sm"><i class="bi bi-calendar3"></i>' . date('l, d F, Y') . '</span><span class="ui-chip"><i class="bi bi-clock"></i><span id="clock">' . date('h:i:s A') . '</span></span>'
             ); ?>
 
+            <div class="ui-quick ui-quick-strip mb-3">
+                <a href="admin_advance.php" class="ui-c-orange"><i class="bi bi-cash-stack" style="color:#f59e0b"></i>Upad / Jama</a>
+                <a href="admin_live_tracking.php" class="ui-c-green"><i class="bi bi-geo-alt text-success"></i>Attendance</a>
+                <a href="admin_manual_time.php" class="ui-c-cyan"><i class="bi bi-clock-history" style="color:#0284c7"></i>Manual Time</a>
+                <a href="admin_reports.php" class="ui-c-red"><i class="bi bi-currency-rupee" style="color:#e11d48"></i>Salary</a>
+                <a href="admin_leaves.php" class="ui-c-purple"><i class="bi bi-calendar2-check" style="color:#7c3aed"></i>Leaves</a>
+                <a href="admin_staff.php?add=1" class="ui-c-blue"><i class="bi bi-person-plus text-primary"></i>Add Staff</a>
+            </div>
+
             <div class="ui-stats">
                 <?php
                 echo ui_stat($total_branches, 'Active Branches', 'bi-building', 'blue', 'admin_branches.php');
@@ -156,7 +165,7 @@ $pct = static fn (int $n) => $total_staff > 0 ? round($n * 100 / $total_staff) :
             </div>
 
             <div class="row g-3 mb-3">
-                <div class="col-xl-4 col-lg-6">
+                <div class="col-lg-6">
                     <div class="ui-panel h-100">
                         <h5 class="ui-panel-title mb-3"><i class="bi bi-people-fill"></i> Today's Attendance Status</h5>
                         <div class="d-flex align-items-center gap-4 flex-wrap">
@@ -170,26 +179,13 @@ $pct = static fn (int $n) => $total_staff > 0 ? round($n * 100 / $total_staff) :
                         </div>
                     </div>
                 </div>
-                <div class="col-xl-4 col-lg-6">
+                <div class="col-lg-6">
                     <div class="ui-panel h-100">
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <h5 class="ui-panel-title"><i class="bi bi-graph-up-arrow"></i> Weekly Attendance Trend</h5>
                             <span class="ui-pill gray">Last 7 days</span>
                         </div>
                         <div style="height:220px"><canvas id="trendChart"></canvas></div>
-                    </div>
-                </div>
-                <div class="col-xl-4">
-                    <div class="ui-panel h-100">
-                        <h5 class="ui-panel-title mb-3"><i class="bi bi-lightning-charge-fill"></i> Quick Actions</h5>
-                        <div class="ui-quick">
-                            <a href="admin_staff.php?add=1" class="ui-c-blue"><i class="bi bi-person-plus text-primary"></i>Add Staff</a>
-                            <a href="admin_manual_time.php" class="ui-c-green"><i class="bi bi-calendar-check text-success"></i>Mark Attendance</a>
-                            <a href="admin_tasks.php" class="ui-c-purple"><i class="bi bi-check2-square" style="color:#7c3aed"></i>Create Task</a>
-                            <a href="admin_announcements.php" class="ui-c-orange"><i class="bi bi-megaphone" style="color:#f59e0b"></i>Add Announcement</a>
-                            <a href="admin_salary_slip.php" class="ui-c-red"><i class="bi bi-currency-rupee" style="color:#e11d48"></i>Generate Salary</a>
-                            <a href="admin_reports.php" class="ui-c-cyan"><i class="bi bi-bar-chart-line" style="color:#0284c7"></i>View Reports</a>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -207,7 +203,7 @@ $pct = static fn (int $n) => $total_staff > 0 ? round($n * 100 / $total_staff) :
                     </div>
                 </div>
                 <div class="table-responsive">
-                    <table class="ui-table" id="staffTable">
+                    <table class="ui-table ui-cards-sm" id="staffTable">
                         <thead><tr><th>#</th><th>Staff Name</th><th>Branch</th><th><i class="bi bi-whatsapp"></i> WhatsApp Number</th><th>Salary Base</th><th>Message Status</th><th class="text-center">Actions</th></tr></thead>
                         <tbody>
                         <?php $i = 0; if ($staff_result && $staff_result->num_rows > 0): while ($row = $staff_result->fetch_assoc()): $i++; ?>

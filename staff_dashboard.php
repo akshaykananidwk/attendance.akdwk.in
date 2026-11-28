@@ -220,7 +220,7 @@ $csrf_token = generate_csrf_token();
                     <div class="ui-panel h-100">
                         <h5 class="ui-panel-title mb-3"><i class="bi bi-calendar-check"></i> Attendance Record <span class="text-muted fw-normal small">(<?php echo $monthLabel; ?>)</span></h5>
                         <div class="table-responsive">
-                            <table class="ui-table text-center">
+                            <table class="ui-cards-sm ui-table text-center">
                                 <thead><tr><th>Date</th><th>In</th><th>Lunch Out</th><th>Lunch In</th><th>Out</th><th>Total Time</th></tr></thead>
                                 <tbody>
                                 <?php if ($logs_result->num_rows > 0): while ($row = $logs_result->fetch_assoc()): ?>
