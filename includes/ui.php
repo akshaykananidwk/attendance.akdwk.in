@@ -40,7 +40,7 @@ function ui_initials(string $name): string
 
 function ui_avatar(string $name, string $size = ''): string
 {
-    $colors = ['#4f6bed', '#7c3aed', '#f59e0b', '#16a34a', '#0ea5e9', '#e11d48', '#0d9488', '#9333ea'];
+    $colors = ['#3b5bdb', '#6d28d9', '#b45309', '#15803d', '#0369a1', '#be123c', '#0f766e', '#7e22ce'];
     $c = $colors[abs(crc32($name)) % count($colors)];
 
     return '<span class="ui-avatar ' . ui_e($size) . '" style="background:' . $c . '">' . ui_e(ui_initials($name)) . '</span>';
