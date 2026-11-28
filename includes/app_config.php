@@ -213,3 +213,11 @@ function app_asset_version(string $rel = 'assets/saas_theme.css'): string
 
     return is_file($f) ? substr(md5((string) filemtime($f) . filesize($f)), 0, 10) : '1';
 }
+
+/** Product name shown on login, sidebar and page titles (override with 'app_name' in config.local.php). */
+function app_brand(): string
+{
+    $n = trim((string) (app_config()['app_name'] ?? ''));
+
+    return $n !== '' ? $n : 'Krishna Attendance';
+}

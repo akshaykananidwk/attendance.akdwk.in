@@ -110,107 +110,96 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
 $csrf_token = generate_csrf_token();
 ?>
-
 <!DOCTYPE html>
-<html lang="en">
+<html lang="gu">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Login | Smart Attendance</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0b1d4a">
+    <title>Login | <?php echo htmlspecialchars(app_brand()); ?></title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
     <style>
-        :root { --primary-color: #128c7e; --secondary-color: #075e54; }
-        body { background: linear-gradient(135deg, #f4f7f6 0%, #e9f2ef 100%); font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; height: 100vh; display: flex; align-items: center; }
-        
-        .login-card { border: none; border-radius: 20px; box-shadow: 0 15px 35px rgba(0,0,0,0.1); overflow: hidden; background: #fff; width: 100%; max-width: 400px; margin: auto; transition: transform 0.3s ease; }
-        .login-card:hover { transform: translateY(-5px); }
-        
-        .card-header-custom { background-color: var(--primary-color); padding: 30px; text-align: center; color: white; }
-        .card-header-custom i { font-size: 3rem; margin-bottom: 10px; }
-        
-        .form-control { border-radius: 10px; padding: 12px 15px; background: #f8f9fa; border: 1px solid #eee; }
-        .form-control:focus { box-shadow: 0 0 0 0.25rem rgba(18, 140, 126, 0.25); border-color: var(--primary-color); background: #fff; }
-        
-        .btn-login { background-color: var(--primary-color); color: white; border: none; border-radius: 10px; padding: 12px; font-weight: 600; width: 100%; transition: 0.3s; }
-        .btn-login:hover { background-color: var(--secondary-color); color: white; box-shadow: 0 5px 15px rgba(18, 140, 126, 0.3); }
-        
-        .features-badge { background: rgba(18, 140, 126, 0.1); color: var(--primary-color); padding: 5px 15px; border-radius: 50px; font-size: 0.8rem; font-weight: 600; }
-        
-        /* Mobile responsive adjustments */
-        @media (max-width: 576px) {
-            body { padding: 20px; align-items: flex-start; padding-top: 50px; }
-            .login-card { box-shadow: 0 10px 20px rgba(0,0,0,0.05); }
-        }
+        :root { --navy: #0b1d4a; --navy2: #101c33; --blue: #1d6cf2; --muted: #64748b; }
+        * { box-sizing: border-box; }
+        body { margin: 0; min-height: 100vh; font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif; color: #0f172a;
+               background: radial-gradient(1200px 600px at 10% -10%, #1e3a8a 0%, transparent 60%), linear-gradient(160deg, #0b1220 0%, #0b1d4a 55%, #0e2763 100%);
+               display: flex; align-items: center; justify-content: center; padding: 24px 16px; }
+        .lg-card { width: 100%; max-width: 440px; border-radius: 28px; overflow: hidden; background: #fff; box-shadow: 0 30px 80px rgba(0,0,0,.45); }
+        .lg-top { background: linear-gradient(180deg, #111c33 0%, #0e1a30 100%); color: #fff; padding: 30px 30px 34px; position: relative; }
+        .lg-brand { display: flex; align-items: center; gap: 14px; }
+        .lg-logo { width: 56px; height: 56px; border-radius: 16px; background: linear-gradient(135deg, #2f80ff, #1d4ed8); display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 20px rgba(29,108,242,.45); flex: 0 0 56px; }
+        .lg-name { font-size: 1.6rem; font-weight: 800; line-height: 1.1; letter-spacing: -.01em; }
+        .lg-sub { color: #a8b5cf; font-size: .95rem; margin-top: 2px; }
+        .lg-shield { width: 86px; height: 86px; margin: 30px auto 18px; border-radius: 50%; background: rgba(255,255,255,.07); display: flex; align-items: center; justify-content: center; font-size: 2.3rem; color: #4f8dff; }
+        .lg-top h1 { text-align: center; font-size: 1.9rem; font-weight: 800; margin: 0; }
+        .lg-top p { text-align: center; color: #a8b5cf; margin: 8px 0 0; }
+        .lg-body { padding: 26px 30px 22px; }
+        .lg-badge { display: inline-block; background: #dcfce7; color: #15803d; font-weight: 700; font-size: .78rem; letter-spacing: .05em; padding: 6px 14px; border-radius: 999px; margin-bottom: 18px; }
+        .lg-label { font-weight: 700; font-size: 1.02rem; margin-bottom: 8px; display: block; }
+        .lg-field { position: relative; margin-bottom: 18px; }
+        .lg-field > i.lead { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: #64748b; font-size: 1.1rem; }
+        .lg-field input { width: 100%; height: 56px; border: 1.5px solid #e2e8f0; border-radius: 14px; padding: 0 50px 0 46px; font-size: 1rem; outline: none; transition: border-color .15s, box-shadow .15s; background: #fff; }
+        .lg-field input:focus { border-color: var(--blue); box-shadow: 0 0 0 4px rgba(29,108,242,.15); }
+        .lg-eye { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); border: 0; background: transparent; color: #475569; font-size: 1.25rem; padding: 8px; }
+        .lg-forgot { display: block; text-align: right; font-weight: 700; color: var(--blue); text-decoration: none; margin: -6px 0 18px; }
+        .lg-btn { width: 100%; height: 58px; border: 0; border-radius: 14px; background: linear-gradient(90deg, #1d6cf2, #2f80ff); color: #fff; font-size: 1.15rem; font-weight: 700; box-shadow: 0 10px 24px rgba(29,108,242,.35); transition: transform .1s, filter .15s; }
+        .lg-btn:hover { filter: brightness(1.05); } .lg-btn:active { transform: scale(.99); }
+        .lg-btn[disabled] { opacity: .75; }
+        .lg-wa { text-align: center; color: #475569; margin: 18px 0 16px; font-size: .95rem; }
+        .lg-wa i { color: #16a34a; margin-right: 6px; }
+        .lg-foot { border-top: 1px solid #e2e8f0; padding-top: 14px; text-align: center; color: #94a3b8; font-size: .88rem; }
+        .lg-alert { border-radius: 12px; padding: 10px 14px; font-weight: 600; font-size: .92rem; background: #fee2e2; color: #b91c1c; margin-bottom: 16px; display: flex; gap: 8px; align-items: flex-start; }
+        @media (max-width: 480px) { body { padding: 0; align-items: stretch; } .lg-card { border-radius: 0; max-width: none; min-height: 100vh; box-shadow: none; } .lg-top { padding: 28px 22px 30px; } .lg-body { padding: 24px 22px; } }
     </style>
 </head>
 <body>
-
-<div class="container">
-    <div class="login-card animated fadeIn">
-        <div class="card-header-custom">
-            <i class="bi bi-whatsapp"></i>
-            <h3 class="fw-bold mb-0">Smart SaaS</h3>
-            <p class="small opacity-75 mt-1">Attendance & Payroll System</p>
+<main class="lg-card">
+    <section class="lg-top">
+        <div class="lg-brand">
+            <div class="lg-logo"><svg width="30" height="30" viewBox="0 0 40 40" aria-hidden="true"><path d="M20 4 36 12 20 20 4 12z" fill="#fff"/><path d="M4 20 20 28l16-8" fill="none" stroke="#dbeafe" stroke-width="3.2" stroke-linejoin="round"/><path d="M4 27.5 20 35.5l16-8" fill="none" stroke="#bfdbfe" stroke-width="3.2" stroke-linejoin="round"/></svg></div>
+            <div><div class="lg-name"><?php echo htmlspecialchars(app_brand()); ?></div><div class="lg-sub">Attendance &amp; Payroll System</div></div>
         </div>
-        
-        <div class="card-body p-4">
-            <div class="text-center mb-4">
-                <span class="features-badge">SECURE LOGIN</span>
+        <div class="lg-shield"><i class="bi bi-shield-check"></i></div>
+        <h1>Welcome Back!</h1>
+        <p>Sign in to your secure workspace</p>
+    </section>
+    <section class="lg-body">
+        <span class="lg-badge">SECURE LOGIN</span>
+        <?php if ($error !== ''): ?>
+            <div class="lg-alert" role="alert"><i class="bi bi-exclamation-circle-fill"></i><span><?php echo htmlspecialchars($error); ?></span></div>
+        <?php endif; ?>
+        <form method="POST" action="" id="loginForm" autocomplete="on">
+            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+            <label class="lg-label" for="phone">WhatsApp Number / LID</label>
+            <div class="lg-field">
+                <i class="bi bi-telephone lead"></i>
+                <input type="text" id="phone" name="phone" inputmode="tel" autocomplete="username" placeholder="Enter WhatsApp Number or LID" required
+                       value="<?php echo htmlspecialchars((string) ($_POST['phone'] ?? '')); ?>">
             </div>
-
-            <?php if($error != ""): ?>
-                <div class="alert alert-danger py-2 small text-center fw-bold"><?php echo $error; ?></div>
-            <?php endif; ?>
-
-            <form method="POST" action="">
-                <input type="hidden" name="csrf_token" value="<?php echo $csrf_token; ?>">
-                <div class="mb-3">
-                    <label class="form-label small fw-bold text-muted">WhatsApp Number / LID</label>
-                    <div class="input-group">
-                        <span class="input-group-text bg-light border-0"><i class="bi bi-telephone text-muted"></i></span>
-                        <input type="text" name="phone" class="form-control" placeholder="e.g. 918160563366" required>
-                    </div>
-                </div>
-                
-                <div class="mb-4">
-                    <div class="d-flex justify-content-between align-items-center mb-1">
-                        <label class="form-label small fw-bold text-muted mb-0">Password</label>
-                        <a href="forgot_password.php" class="small text-decoration-none fw-bold" style="color: var(--primary-color);">Forgot Password?</a>
-                    </div>
-                    <div class="input-group">
-                        <span class="input-group-text bg-light border-0"><i class="bi bi-lock text-muted"></i></span>
-                        <input type="password" name="password" class="form-control" placeholder="••••••••" required>
-                    </div>
-                </div>
-
-                <button type="submit" class="btn btn-login mb-3">
-                    LOG IN TO PANEL <i class="bi bi-arrow-right-short"></i>
-                </button>
-            </form>
-            
-            <div class="text-center mt-3">
-                <p class="text-muted small">Integrated with WhatsApp Cloud API<br>© 2026 Smart Attendance System</p>
+            <label class="lg-label" for="password">Password</label>
+            <div class="lg-field">
+                <i class="bi bi-lock lead"></i>
+                <input type="password" id="password" name="password" autocomplete="current-password" placeholder="Enter your password" required>
+                <button type="button" class="lg-eye" id="eyeBtn" aria-label="Show password"><i class="bi bi-eye"></i></button>
             </div>
-        </div>
-    </div>
-    
-    <div class="row mt-5 d-none d-md-flex text-center justify-content-center">
-        <div class="col-md-3">
-            <i class="bi bi-lightning-charge-fill text-warning fs-4"></i>
-            <p class="small fw-bold">Real-time Tracking</p>
-        </div>
-        <div class="col-md-3">
-            <i class="bi bi-shield-check text-success fs-4"></i>
-            <p class="small fw-bold">Secure Access</p>
-        </div>
-        <div class="col-md-3">
-            <i class="bi bi-phone-vibrate text-primary fs-4"></i>
-            <p class="small fw-bold">WhatsApp Reply</p>
-        </div>
-    </div>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+            <a class="lg-forgot" href="forgot_password.php">Forgot Password?</a>
+            <button type="submit" class="lg-btn" id="loginBtn">Sign In Securely <i class="bi bi-arrow-right"></i></button>
+        </form>
+        <div class="lg-wa"><i class="bi bi-whatsapp"></i>Integrated with WhatsApp Cloud API</div>
+        <div class="lg-foot">© <?php echo date('Y'); ?> <?php echo htmlspecialchars(app_brand()); ?> System</div>
+    </section>
+</main>
+<script>
+    document.getElementById('eyeBtn').addEventListener('click', function () {
+        var p = document.getElementById('password'), show = p.type === 'password';
+        p.type = show ? 'text' : 'password';
+        this.innerHTML = show ? '<i class="bi bi-eye-slash"></i>' : '<i class="bi bi-eye"></i>';
+        this.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+    });
+    document.getElementById('loginForm').addEventListener('submit', function () {
+        var b = document.getElementById('loginBtn'); b.disabled = true; b.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Signing in…';
+    });
+</script>
 </body>
 </html>

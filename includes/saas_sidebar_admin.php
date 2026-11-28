@@ -103,7 +103,7 @@ $saas_role_label = ['admin' => 'Super Admin', 'manager' => 'Manager', 'hr' => 'H
 <div class="col-md-2 sidebar" id="sidebar">
     <div class="saas-sidebar-brand">
         <svg class="saas-brand-logo" viewBox="0 0 40 40" aria-hidden="true"><defs><linearGradient id="sbg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#60a5fa"/><stop offset="1" stop-color="#1d6cf2"/></linearGradient></defs><path d="M20 3 36 11.5 20 20 4 11.5z" fill="url(#sbg)"/><path d="M4 19.5 20 28l16-8.5" fill="none" stroke="#93c5fd" stroke-width="3" stroke-linejoin="round"/><path d="M4 27 20 35.5 36 27" fill="none" stroke="#3b82f6" stroke-width="3" stroke-linejoin="round"/></svg>
-        <div><div class="saas-brand-name">Smart SaaS</div><div class="saas-brand-sub">HR • Operations • Payroll<?php echo $saas_is_auditor ? ' · Auditor' : ''; ?></div></div>
+        <div><div class="saas-brand-name"><?php echo ui_e(app_brand()); ?></div><div class="saas-brand-sub">HR • Operations • Payroll<?php echo $saas_is_auditor ? ' · Auditor' : ''; ?></div></div>
     </div>
     <div class="saas-sidebar-scroll">
         <?php foreach ($saas_menu as $section => $items): ?>
