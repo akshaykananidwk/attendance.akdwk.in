@@ -150,7 +150,38 @@ $csrf_token = generate_csrf_token();
         .lg-wa i { color: #16a34a; margin-right: 6px; }
         .lg-foot { border-top: 1px solid #e2e8f0; padding-top: 14px; text-align: center; color: #94a3b8; font-size: .88rem; }
         .lg-alert { border-radius: 12px; padding: 10px 14px; font-weight: 600; font-size: .92rem; background: #fee2e2; color: #b91c1c; margin-bottom: 16px; display: flex; gap: 8px; align-items: flex-start; }
-        @media (max-width: 480px) { body { padding: 0; align-items: stretch; } .lg-card { border-radius: 0; max-width: none; min-height: 100vh; box-shadow: none; } .lg-top { padding: 28px 22px 30px; } .lg-body { padding: 24px 22px; } }
+        /* compact sizing (desktop + phone) */
+        .lg-card { max-width: 400px; border-radius: 22px; }
+        .lg-top { padding: 22px 24px 22px; }
+        .lg-logo { width: 44px; height: 44px; flex-basis: 44px; border-radius: 12px; }
+        .lg-logo svg { width: 24px; height: 24px; }
+        .lg-name { font-size: 1.25rem; } .lg-sub { font-size: .8rem; }
+        .lg-shield { width: 54px; height: 54px; font-size: 1.5rem; margin: 18px auto 10px; }
+        .lg-top h1 { font-size: 1.35rem; } .lg-top p { font-size: .86rem; margin-top: 4px; }
+        .lg-body { padding: 18px 24px 16px; }
+        .lg-badge { font-size: .68rem; padding: 4px 11px; margin-bottom: 12px; }
+        .lg-label { font-size: .88rem; margin-bottom: 6px; }
+        .lg-field { margin-bottom: 12px; }
+        .lg-field input { height: 46px; font-size: .95rem; border-radius: 12px; padding-left: 42px; }
+        .lg-field > i.lead { left: 14px; font-size: 1rem; }
+        .lg-eye { font-size: 1.1rem; }
+        .lg-forgot { font-size: .86rem; margin: -2px 0 14px; }
+        .lg-btn { height: 48px; font-size: 1rem; border-radius: 12px; }
+        .lg-wa { font-size: .82rem; margin: 14px 0 10px; }
+        .lg-foot { font-size: .76rem; padding-top: 10px; }
+        .lg-alert { font-size: .84rem; padding: 8px 12px; margin-bottom: 12px; }
+        @media (max-width: 480px) {
+            body { padding: 0; align-items: stretch; background: #fff; }
+            .lg-card { border-radius: 0; max-width: none; min-height: 100vh; min-height: 100dvh; box-shadow: none; display: flex; flex-direction: column; }
+            .lg-top { padding: 18px 18px 18px; border-radius: 0 0 22px 22px; }
+            .lg-shield { display: none; }
+            .lg-top h1 { text-align: left; font-size: 1.2rem; margin-top: 16px; }
+            .lg-top p { text-align: left; font-size: .82rem; }
+            .lg-body { padding: 16px 18px 14px; flex: 1; display: flex; flex-direction: column; }
+            .lg-foot { margin-top: auto; }
+            .lg-badge { align-self: flex-start; }
+            .lg-body form { margin-top: 4px; }
+        }
     </style>
     <?php echo app_pwa_head(); ?>
 </head>
