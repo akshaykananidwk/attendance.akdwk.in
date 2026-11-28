@@ -54,6 +54,7 @@ function password_change_handle(mysqli $conn): string
     $stmt->close();
     session_regenerate_id(true);
     unset($_SESSION['pw_fail']);
+    remember_revoke_user($conn, $uid); // other devices must log in again with the new password
     write_audit_log($conn, 'account.password_changed', 'User changed own password', 'user', (string) $uid);
 
     return '<div class="alert alert-success fw-bold"><i class="bi bi-check-circle-fill"></i> Password changed successfully. Use the new password from next login.</div>';

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 300" preserveAspectRatio="xMinYMax meet">
+  <defs><radialGradient id="sun" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#fff6d6"/><stop offset=".55" stop-color="#ffd38a"/><stop offset="1" stop-color="#ff9b4a" stop-opacity="0"/></radialGradient>
+  <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a2a6b"/><stop offset="1" stop-color="#0d1240"/></linearGradient></defs>
+  <circle cx="110" cy="150" r="46" fill="url(#sun)"/><circle cx="110" cy="150" r="20" fill="#fff4cf"/>
+  <!-- far city -->
+  <g fill="#2b1f3f" opacity=".9"><path d="M150 168h22v-14h8v-10h10v24h14v-18h10v18h30v-8h12v8h40v12H150z"/><path d="M196 144l6-10 6 10z"/></g>
+  <g fill="#ffcf7a" opacity=".85"><rect x="158" y="160" width="3" height="3"/><rect x="186" y="158" width="3" height="3"/><rect x="214" y="160" width="3" height="3"/><rect x="246" y="162" width="3" height="3"/></g>
+  <rect x="0" y="168" width="420" height="132" fill="url(#sea)"/>
+  <g stroke="#ffc27a" stroke-linecap="round" opacity=".8"><path d="M86 176h48" stroke-width="3"/><path d="M78 190h64" stroke-width="2.5"/><path d="M92 204h36" stroke-width="2"/><path d="M70 220h78" stroke-width="1.6" opacity=".7"/><path d="M96 238h30" stroke-width="1.4" opacity=".6"/></g>
+  <path d="M0 250c30-12 60-6 90-14s50-4 80 2 60 14 120 6v56H0z" fill="#120d22"/>
+  <g stroke="#1b1530" fill="none" stroke-width="1.5"><path d="M30 120l7 5 7-5M54 108l6 4 6-4M14 102l5 3 5-3"/></g>
+</svg>
