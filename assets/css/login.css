@@ -1,0 +1,121 @@
+/* Krishna Attendance — premium login (glass card on Dwarka sunset photo) */
+:root {
+    --lg-navy: #050f37;
+    --lg-blue: #2563eb;
+    --lg-blue-2: #3b8bff;
+    --lg-cyan: #5ec2ff;
+    --lg-text: #ffffff;
+    --lg-soft: #d6defc;
+    --lg-glass: rgba(14, 24, 78, .42);
+    --lg-glass-border: rgba(255, 255, 255, .26);
+    --lg-input: rgba(6, 14, 52, .42);
+    --lg-radius: 22px;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; font-family: "Inter", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; color: var(--lg-text); background: var(--lg-navy); }
+
+.login-page {
+    min-height: 100vh;
+    min-height: 100svh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: max(18px, env(safe-area-inset-top)) 16px max(14px, env(safe-area-inset-bottom));
+    background-color: var(--lg-navy);
+    background-image:
+        linear-gradient(rgba(5, 15, 55, .48), rgba(5, 15, 55, .62)),
+        url('../images/krishna-login-bg.jpg');
+    background-image:
+        linear-gradient(rgba(5, 15, 55, .48), rgba(5, 15, 55, .62)),
+        image-set(url('../images/krishna-login-bg.webp') type('image/webp'), url('../images/krishna-login-bg.jpg') type('image/jpeg'));
+    background-size: cover;
+    background-position: 78% center;   /* keeps the temple (right side of the photo) in view on phones */
+    background-repeat: no-repeat;
+    background-attachment: scroll;
+}
+.login-main { width: 100%; max-width: 420px; margin: auto 0; padding: 6px 0 14px; animation: lgIn .5s ease both; }
+
+/* brand */
+.lg-brand { text-align: center; margin-bottom: 14px; }
+.lg-logo { width: 58px; height: 58px; margin: 0 auto 8px; border-radius: 17px; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(145deg, #3b82ff, #1442c9); box-shadow: 0 10px 28px rgba(37, 99, 235, .55), inset 0 1px 0 rgba(255, 255, 255, .3); }
+.lg-title { display: inline-flex; align-items: center; gap: 4px; margin: 0; font-size: 1.7rem; font-weight: 800; letter-spacing: -.01em; line-height: 1.15; text-shadow: 0 2px 12px rgba(0, 0, 0, .35); }
+.lg-title span { color: var(--lg-cyan); }
+.lg-feather { width: 26px; height: 42px; flex: 0 0 26px; }
+.lg-sub { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 4px 0 0; font-size: .86rem; color: var(--lg-soft); text-shadow: 0 1px 8px rgba(0, 0, 0, .4); }
+.lg-sub::before, .lg-sub::after { content: ""; width: 26px; height: 2px; border-radius: 2px; background: linear-gradient(90deg, transparent, #f5c06b); }
+.lg-sub::after { transform: scaleX(-1); }
+
+/* glass card */
+.lg-card { position: relative; padding: 20px 18px 14px; border-radius: var(--lg-radius); background: linear-gradient(160deg, rgba(255, 255, 255, .16), rgba(255, 255, 255, .05)), var(--lg-glass);
+    border: 1px solid var(--lg-glass-border); box-shadow: 0 22px 60px rgba(2, 6, 30, .5), inset 0 1px 0 rgba(255, 255, 255, .18);
+    backdrop-filter: blur(10px) saturate(140%); -webkit-backdrop-filter: blur(10px) saturate(140%); }
+.lg-card h2 { margin: 0; text-align: center; font-size: 1.4rem; font-weight: 800; }
+.lg-lead { margin: 3px 0 10px; text-align: center; font-size: .86rem; color: var(--lg-soft); }
+.lg-badge { display: table; margin: 0 auto 12px; padding: 5px 13px; border-radius: 999px; font-size: .7rem; font-weight: 800; letter-spacing: .06em;
+    color: #6ee7b7; background: rgba(16, 185, 129, .18); border: 1px solid rgba(52, 211, 153, .5); }
+.lg-badge i { margin-right: 5px; }
+.lg-alert { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 10px; padding: 8px 12px; border-radius: 12px; font-size: .84rem; font-weight: 600;
+    background: rgba(239, 68, 68, .24); border: 1px solid rgba(248, 113, 113, .6); color: #fee2e2; }
+
+.lg-label { display: block; margin: 0 0 5px; font-size: .85rem; font-weight: 700; }
+.lg-field { position: relative; margin-bottom: 11px; }
+.lg-field .lg-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); font-size: 1.05rem; color: var(--lg-soft); pointer-events: none; }
+.lg-field .lg-icon.wa { color: #4ade80; }
+.lg-field input { width: 100%; height: 48px; padding: 0 46px 0 42px; border-radius: 13px; border: 1px solid rgba(255, 255, 255, .3); background: var(--lg-input);
+    color: #fff; font-size: 1rem; outline: none; transition: border-color .15s, box-shadow .15s, background .15s; }
+.lg-field input::placeholder { color: rgba(220, 228, 255, .72); }
+.lg-field input:focus { border-color: #7ab6ff; background: rgba(6, 14, 52, .6); box-shadow: 0 0 0 3px rgba(96, 165, 250, .32); }
+.lg-eye { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 42px; height: 42px; border: 0; border-radius: 10px; background: transparent; color: var(--lg-soft); font-size: 1.15rem; cursor: pointer; }
+.lg-eye:focus-visible { outline: 2px solid #7ab6ff; }
+
+.lg-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 2px 0 12px; font-size: .86rem; }
+.lg-remember { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; min-height: 32px; }
+.lg-remember input { width: 18px; height: 18px; margin: 0; accent-color: var(--lg-blue); }
+.lg-row a { color: #8fd0ff; font-weight: 700; text-decoration: none; padding: 6px 0; }
+.lg-row a:hover { text-decoration: underline; }
+
+.lg-btn { width: 100%; height: 50px; display: flex; align-items: center; justify-content: center; gap: 9px; border: 0; border-radius: 14px; cursor: pointer;
+    font-size: 1.03rem; font-weight: 800; color: #fff; letter-spacing: .01em;
+    background: linear-gradient(90deg, #1e6bff, var(--lg-blue-2) 50%, #1d4ed8); background-size: 200% 100%;
+    box-shadow: 0 10px 26px rgba(37, 99, 235, .55), inset 0 1px 0 rgba(255, 255, 255, .3); transition: background-position .4s, transform .1s, filter .15s; }
+.lg-btn:hover { background-position: 100% 0; filter: brightness(1.05); }
+.lg-btn:active { transform: scale(.99); }
+.lg-btn[disabled] { opacity: .8; cursor: progress; }
+.lg-btn:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
+
+.lg-wa { margin: 11px 0 2px; text-align: center; font-size: .82rem; color: var(--lg-soft); }
+.lg-wa i { color: #4ade80; margin-right: 5px; }
+
+.login-footer { width: 100%; text-align: center; font-size: .76rem; color: var(--lg-soft); padding: 6px 0 0; text-shadow: 0 1px 6px rgba(0, 0, 0, .6); }
+
+@keyframes lgIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .login-main { animation: none; } .lg-btn { transition: none; } }
+
+/* desktop */
+@media (min-width: 768px) {
+    .login-page { background-position: center 62%; padding-top: 28px; }
+    .login-main { max-width: 440px; }
+    .lg-logo { width: 64px; height: 64px; }
+    .lg-title { font-size: 2rem; }
+    .lg-card { padding: 24px 24px 16px; }
+    .lg-card h2 { font-size: 1.55rem; }
+}
+/* short screens: keep the form above the fold */
+@media (max-height: 640px) {
+    .lg-logo { display: none; }
+    .lg-brand { margin-bottom: 8px; }
+    .lg-sub { display: none; }
+    .lg-lead { margin-bottom: 6px; } .lg-badge { margin-bottom: 8px; }
+    .lg-field { margin-bottom: 8px; }
+}
+.lg-spin { width: 18px; height: 18px; border: 2.5px solid rgba(255,255,255,.4); border-top-color: #fff; border-radius: 50%; display: inline-block; animation: lgSpin .7s linear infinite; }
+@keyframes lgSpin { to { transform: rotate(360deg); } }
+.lg-row .lg-remember, .lg-row a { white-space: nowrap; }
+@media (max-width: 380px) {
+    .lg-row { font-size: .8rem; gap: 6px; }
+    .lg-remember { gap: 6px; }
+    .lg-field input { font-size: .95rem; }
+    .lg-title { font-size: 1.5rem; }
+}
