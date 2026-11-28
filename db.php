@@ -311,3 +311,4 @@ require_once __DIR__ . '/includes/payroll.php';
 require_once __DIR__ . '/includes/ui.php';
 require_once __DIR__ . '/includes/leave_policy.php';
 require_once __DIR__ . '/includes/attendance_automation.php';
+require_once __DIR__ . '/includes/early_out.php';

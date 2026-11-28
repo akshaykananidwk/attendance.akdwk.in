@@ -40,7 +40,15 @@ function staff_save_payroll_options(mysqli $conn, int $userId, int $companyId, s
     $stmt->bind_param('sssdii', $mode, $mode, $off, $inc, $userId, $companyId);
     $stmt->execute();
     $stmt->close();
-    write_audit_log($conn, 'staff.payroll_options', "staff_id={$userId} attendance_mode={$mode} weekly_off={$off} rate_increment={$inc}", 'user', (string) $userId);
+    if (db_column_exists($conn, 'users', 'shift_end_time')) {
+        $end = trim((string) ($_POST[$prefix . 'shift_end_time'] ?? ''));
+        $end = preg_match('/^\d{2}:\d{2}(:\d{2})?$/', $end) ? (strlen($end) === 5 ? $end . ':00' : $end) : null;
+        $st = $conn->prepare('UPDATE users SET shift_end_time = ? WHERE id = ? AND company_id = ?');
+        $st->bind_param('sii', $end, $userId, $companyId);
+        $st->execute();
+        $st->close();
+    }
+    write_audit_log($conn, 'staff.payroll_options', "staff_id={$userId} attendance_mode={$mode} weekly_off={$off} rate_increment={$inc} shift_end=" . ($_POST[$prefix . 'shift_end_time'] ?? ''), 'user', (string) $userId);
 }
 
 // 1. ADD STAFF LOGIC
@@ -356,6 +364,7 @@ while ($cr && ($c = $cr->fetch_assoc())) {
                                     <?php if ((float) ($row['rate_increment'] ?? 0) > 0): ?> <span class="ui-pill amber">+₹<?php echo (float) $row['rate_increment']; ?>/month</span><?php endif; ?>
                                     <br><span class="ui-pill gray mt-1"><?php echo ['self' => 'Self punch', 'auto' => 'Auto present', 'manual' => 'Manual'][$row['attendance_mode'] ?? 'self'] ?? 'Self punch'; ?></span>
                                     <span class="ui-pill gray mt-1"><?php echo htmlspecialchars(payroll_weekly_off_label($row)); ?></span>
+                                    <span class="ui-pill blue mt-1"><i class="bi bi-clock"></i> <?php echo htmlspecialchars(shift_label($row)); ?></span>
                                     <?php if (!empty($row['custom_hourly_rate'])): ?>
                                         <br><span class="text-success small fw-bold" title="Custom Rate for this month">This Mth: ₹<?php echo $row['custom_hourly_rate']; ?></span>
                                     <?php endif; ?>
@@ -403,6 +412,7 @@ while ($cr && ($c = $cr->fetch_assoc())) {
                                         data-staff-amount="<?php echo htmlspecialchars((string) $row['salary_amount'], ENT_QUOTES, 'UTF-8'); ?>"
                                         data-staff-join="<?php echo htmlspecialchars((string) ($row['join_date'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
                                         data-staff-shift="<?php echo htmlspecialchars((string) ($row['shift_start_time'] ?? '09:30:00'), ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-staff-shift-end="<?php echo htmlspecialchars(substr((string) ($row['shift_end_time'] ?? ''), 0, 5), ENT_QUOTES, 'UTF-8'); ?>"
                                         data-staff-branch="<?php echo (int) $row['branch_id']; ?>"
                                         data-staff-mode="<?php echo htmlspecialchars((string) ($row['attendance_mode'] ?? 'self'), ENT_QUOTES, 'UTF-8'); ?>"
                                         data-staff-off="<?php echo htmlspecialchars((string) ($row['weekly_off'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
@@ -438,7 +448,8 @@ while ($cr && ($c = $cr->fetch_assoc())) {
                 <div class="mb-3"><label class="form-label fw-bold">Login Password</label><input type="text" name="password" class="form-control" required></div>
                 <div class="row">
                     <div class="col-6 mb-3"><label class="form-label fw-bold">Joining Date</label><input type="date" name="join_date" class="form-control" value="<?php echo date('Y-m-d'); ?>" required></div>
-                    <div class="col-6 mb-3"><label class="form-label fw-bold">Shift Start Time</label><input type="time" name="shift_start_time" class="form-control" value="09:30" required></div>
+                    <div class="col-6 mb-3"><label class="form-label fw-bold">Shift Start</label><input type="time" name="shift_start_time" class="form-control" value="09:30" required></div>
+                    <div class="col-6 mb-3"><label class="form-label fw-bold">Shift End</label><input type="time" name="shift_end_time" class="form-control" value="18:30"><div class="form-text small">Punch-out before this needs admin approval. Empty = no limit.</div></div>
                 </div>
                 <div class="mb-3">
                     <label class="form-label fw-bold">Assign Branch</label>
@@ -487,7 +498,8 @@ while ($cr && ($c = $cr->fetch_assoc())) {
                 <div class="mb-3"><label class="form-label fw-bold">Password (Leave blank if no change)</label><input type="text" name="edit_password" id="e_pass" class="form-control" placeholder="New Password"></div>
                 <div class="row">
                     <div class="col-6 mb-3"><label class="form-label fw-bold">Joining Date</label><input type="date" name="edit_join_date" id="e_join" class="form-control" required></div>
-                    <div class="col-6 mb-3"><label class="form-label fw-bold">Shift Start Time</label><input type="time" name="edit_shift_start_time" id="e_shift" class="form-control" required></div>
+                    <div class="col-6 mb-3"><label class="form-label fw-bold">Shift Start</label><input type="time" name="edit_shift_start_time" id="e_shift" class="form-control" required></div>
+                    <div class="col-6 mb-3"><label class="form-label fw-bold">Shift End</label><input type="time" name="edit_shift_end_time" id="e_shift_end" class="form-control"><div class="form-text small">Punch-out before this needs admin approval. Empty = no limit.</div></div>
                 </div>
                 <div class="mb-3">
                     <label class="form-label fw-bold">Change Branch</label>
@@ -640,6 +652,7 @@ while ($cr && ($c = $cr->fetch_assoc())) {
             document.getElementById('e_amount').value = this.getAttribute('data-staff-amount') || '';
             document.getElementById('e_join').value = this.getAttribute('data-staff-join') || '';
             document.getElementById('e_shift').value = this.getAttribute('data-staff-shift') || '09:30';
+            document.getElementById('e_shift_end').value = this.getAttribute('data-staff-shift-end') || '';
             document.getElementById('e_mode').value = this.getAttribute('data-staff-mode') || 'self';
             document.getElementById('e_inc').value = this.getAttribute('data-staff-inc') || '0';
             var offs = (this.getAttribute('data-staff-off') || '').split(',');

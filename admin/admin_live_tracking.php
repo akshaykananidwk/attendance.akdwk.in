@@ -44,6 +44,16 @@ foreach ($rows as &$r) {
 }
 unset($r);
 $t = static fn ($v) => $v ? date('h:i A', strtotime((string) $v)) : '';
+$earlyMap = [];
+if (early_out_ready($conn)) {
+    $st2 = $conn->prepare("SELECT user_id, requested_time FROM early_out_requests WHERE company_id = ? AND log_date = ? AND status = 'pending'");
+    $st2->bind_param('is', $company_id, $selected_date);
+    $st2->execute();
+    foreach ($st2->get_result()->fetch_all(MYSQLI_ASSOC) as $e) {
+        $earlyMap[(int) $e['user_id']] = $e['requested_time'];
+    }
+    $st2->close();
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -130,7 +140,7 @@ $t = static fn ($v) => $v ? date('h:i A', strtotime((string) $v)) : '';
                                         }
                                     ?></td>
                                     <td><?php echo [
-                                        'working' => '<span class="ui-pill solid-green">● Working</span>',
+                                        'working' => isset($earlyMap[(int) $row['id']]) ? '<a href="admin_leaves.php" class="ui-pill solid-amber text-decoration-none">⏳ Early out ' . $t($earlyMap[(int) $row['id']]) . ' — approve</a>' : '<span class="ui-pill solid-green">● Working</span>',
                                         'ended' => '<span class="ui-pill solid-blue">● Shift Ended</span>',
                                         'break' => '<span class="ui-pill solid-amber">● On Break</span>',
                                         'notin' => '<span class="ui-pill gray">Not In</span>',

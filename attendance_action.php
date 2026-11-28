@@ -55,9 +55,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $stmt_u->execute();
         $u_info = $stmt_u->get_result()->fetch_assoc();
         $stmt_u->close();
-        if ($u_info) {
+        $pset = payroll_settings($conn);
+        $uFull = payroll_user($conn, $user_id);
+        if ($u_info && $uFull && attendance_penalty_applies($uFull, $today_date) && (float) $pset['penalty_late_days'] > 0) {
             $shift_time = $u_info['shift_start_time'] ?? '09:30:00';
-            if (strtotime($punch_time) > strtotime($shift_time) + 3600) {
+            if (strtotime($punch_time) > strtotime($shift_time) + 60 * (int) $pset['late_grace_minutes']) {
                 $stmt_pchk = $conn->prepare("SELECT id FROM staff_penalties WHERE user_id=? AND penalty_date=? AND penalty_type='late_punch'");
                 $stmt_pchk->bind_param("is", $user_id, $today_date);
                 $stmt_pchk->execute();
@@ -66,9 +68,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 if (!$penalized) {
                     $ptype = 'late_punch';
                     $preason = 'Late Punch - Arrived after 1 hour of shift time (' . date('h:i A', strtotime($shift_time)) . ')';
-                    $pdays = 0.5;
+                    $pdays = (float) $pset['penalty_late_days'];
                     $stmt_ins = $conn->prepare("INSERT INTO staff_penalties (user_id, company_id, penalty_date, penalty_type, deduction_days, reason, created_by) VALUES (?, ?, ?, ?, ?, ?, 0)");
-                    $stmt_ins->bind_param("iissss", $user_id, $company_id, $today_date, $ptype, $pdays, $preason);
+                    $stmt_ins->bind_param("iissds", $user_id, $company_id, $today_date, $ptype, $pdays, $preason);
                     if ($stmt_ins->execute() && !empty($u_info['phone_number'])) {
                         $msg = "⚠️ *Penalty Notice* ⚠️\n\nHello {$u_info['name']},\nતમે તમારા નિર્ધારિત સમય (" . date('h:i A', strtotime($shift_time)) . ") ના 1 કલાક પછી પંચિંગ કર્યું છે.\nતેથી તમને *Half Day* ની પેનલ્ટી લગાવવામાં આવી છે.\n\nજો કોઈ કારણ હોય તો એડમિનનો સંપર્ક કરો.";
                         sendWhatsAppDirectMessage($u_info['phone_number'], $msg);
@@ -91,6 +93,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $stmt->close();
             sendWhatsAppGroupNotification("*$staff_name* • Lunch IN at $time_now ✅");
         } elseif ($action === 'punch_out') {
+            // Before shift end → no direct punch-out; request goes to admin for approval.
+            $uRow = payroll_user($conn, $user_id);
+            $endTs = ($uRow && early_out_ready($conn)) ? shift_end_ts($uRow, $today_date) : null;
+            if ($endTs !== null && time() < $endTs) {
+                if (!early_out_pending($conn, $user_id, $today_date)) {
+                    early_out_create($conn, $uRow, $record, $punch_time, (string) ($_POST['reason'] ?? ''));
+                    $endLabel = date('h:i A', $endTs);
+                    sendWhatsAppGroupNotification("*$staff_name* • requested EARLY punch-out at $time_now (shift ends $endLabel) ⏳ Approve in Leave Approvals");
+                }
+                header('Location: staff_dashboard.php?early=sent');
+                exit;
+            }
             $total_minutes = attendance_worked_minutes_from_row(array_merge($record, [
                 'punch_out' => $punch_time,
             ]));

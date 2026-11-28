@@ -30,7 +30,7 @@ if ($saas_is_auditor) {
             ['admin_staff.php', 'bi-people-fill', 'Staff'],
             ['admin_advance.php', 'bi-cash-stack', 'Upad &amp; Jama'],
             ['admin_manual_time.php', 'bi-clock-history', 'Manual Time'],
-            ['admin_leaves.php', 'bi-calendar2-check', 'Leave Approvals'],
+            ['admin_leaves.php', 'bi-calendar2-check', 'Approvals'],
         ],
         'Salary' => [
             ['admin_reports.php', 'bi-bar-chart-line-fill', 'Salary Reports'],
@@ -61,38 +61,43 @@ if ($saas_is_auditor) {
 // Notifications (pending leave requests + open tasks) — cheap counts, ignore errors
 $saas_notes = [];
 if (isset($conn) && $conn instanceof mysqli && !$saas_is_auditor) {
-    $r = @$conn->query("SELECT COUNT(*) FROM leave_requests WHERE status = 'pending' AND company_id = $saas_cid");
-    $n = $r ? (int) $r->fetch_row()[0] : 0;
-    if ($n > 0) {
-        $saas_notes[] = ['admin_leaves.php', 'bi-calendar2-check text-warning', "$n leave request(s) waiting for approval"];
+    $saas_r = @$conn->query("SELECT COUNT(*) FROM leave_requests WHERE status = 'pending' AND company_id = $saas_cid");
+    $saas_n = $saas_r ? (int) $saas_r->fetch_row()[0] : 0;
+    if ($saas_n > 0) {
+        $saas_notes[] = ['admin_leaves.php', 'bi-calendar2-check text-warning', "$saas_n leave request(s) waiting for approval"];
     }
-    $r = @$conn->query("SELECT COUNT(*) FROM resignation_requests WHERE status = 'pending' AND company_id = $saas_cid");
-    $n = $r ? (int) $r->fetch_row()[0] : 0;
-    if ($n > 0) {
-        $saas_notes[] = ['admin_resignations.php', 'bi-door-open text-danger', "$n resignation request(s) pending"];
+    $saas_r = @$conn->query("SELECT COUNT(*) FROM early_out_requests WHERE status = 'pending' AND company_id = $saas_cid");
+    $saas_n = $saas_r ? (int) $saas_r->fetch_row()[0] : 0;
+    if ($saas_n > 0) {
+        $saas_notes[] = ['admin_leaves.php', 'bi-box-arrow-right text-warning', "$saas_n early punch-out request(s) to approve"];
     }
-    $r = @$conn->query("SELECT COUNT(*) FROM tasks WHERE status <> 'Completed' AND company_id = $saas_cid");
-    $n = $r ? (int) $r->fetch_row()[0] : 0;
-    if ($n > 0) {
-        $saas_notes[] = ['admin_tasks.php', 'bi-list-check text-primary', "$n task(s) not completed"];
+    $saas_r = @$conn->query("SELECT COUNT(*) FROM resignation_requests WHERE status = 'pending' AND company_id = $saas_cid");
+    $saas_n = $saas_r ? (int) $saas_r->fetch_row()[0] : 0;
+    if ($saas_n > 0) {
+        $saas_notes[] = ['admin_resignations.php', 'bi-door-open text-danger', "$saas_n resignation request(s) pending"];
+    }
+    $saas_r = @$conn->query("SELECT COUNT(*) FROM tasks WHERE status <> 'Completed' AND company_id = $saas_cid");
+    $saas_n = $saas_r ? (int) $saas_r->fetch_row()[0] : 0;
+    if ($saas_n > 0) {
+        $saas_notes[] = ['admin_tasks.php', 'bi-list-check text-primary', "$saas_n task(s) not completed"];
     }
 }
 
 // Search index: menu pages + staff + branches
 $saas_index = [];
-foreach ($saas_menu as $items) {
-    foreach ($items as [$h, $i, $l]) {
-        $saas_index[] = ['t' => html_entity_decode($l), 'u' => $h, 'i' => $i, 'k' => 'Page'];
+foreach ($saas_menu as $saas_items) {
+    foreach ($saas_items as [$saas_h, $saas_i, $saas_l]) {
+        $saas_index[] = ['t' => html_entity_decode($saas_l), 'u' => $saas_h, 'i' => $saas_i, 'k' => 'Page'];
     }
 }
 if (isset($conn) && $conn instanceof mysqli) {
-    $r = @$conn->query("SELECT name, phone_number FROM users WHERE role = 'staff' AND company_id = $saas_cid ORDER BY name LIMIT 300");
-    while ($r && ($row = $r->fetch_assoc())) {
-        $saas_index[] = ['t' => $row['name'] . ' · ' . $row['phone_number'], 'u' => 'admin_staff.php?filter=all&q=' . rawurlencode($row['name']), 'i' => 'bi-person', 'k' => 'Staff'];
+    $saas_r = @$conn->query("SELECT name, phone_number FROM users WHERE role = 'staff' AND company_id = $saas_cid ORDER BY name LIMIT 300");
+    while ($saas_r && ($saas_row = $saas_r->fetch_assoc())) {
+        $saas_index[] = ['t' => $saas_row['name'] . ' · ' . $saas_row['phone_number'], 'u' => 'admin_staff.php?filter=all&q=' . rawurlencode($saas_row['name']), 'i' => 'bi-person', 'k' => 'Staff'];
     }
-    $r = @$conn->query("SELECT name FROM branches WHERE company_id = $saas_cid LIMIT 100");
-    while ($r && ($row = $r->fetch_assoc())) {
-        $saas_index[] = ['t' => $row['name'], 'u' => 'admin_branches.php?q=' . rawurlencode($row['name']), 'i' => 'bi-building', 'k' => 'Branch'];
+    $saas_r = @$conn->query("SELECT name FROM branches WHERE company_id = $saas_cid LIMIT 100");
+    while ($saas_r && ($saas_row = $saas_r->fetch_assoc())) {
+        $saas_index[] = ['t' => $saas_row['name'], 'u' => 'admin_branches.php?q=' . rawurlencode($saas_row['name']), 'i' => 'bi-building', 'k' => 'Branch'];
     }
 }
 $saas_role_label = ['admin' => 'Super Admin', 'manager' => 'Manager', 'hr' => 'HR', 'auditor' => 'Auditor'][$saas_role] ?? ucfirst($saas_role);
@@ -103,16 +108,16 @@ $saas_role_label = ['admin' => 'Super Admin', 'manager' => 'Manager', 'hr' => 'H
         <div><div class="saas-brand-name"><?php echo ui_e(app_brand()); ?></div><div class="saas-brand-sub">HR • Operations • Payroll<?php echo $saas_is_auditor ? ' · Auditor' : ''; ?></div></div>
     </div>
     <div class="saas-sidebar-scroll">
-        <?php foreach ($saas_menu as $section => $items):
-            if ($section === 'More'):
-                $open = in_array($saas_cur, array_column($items, 0), true); ?>
-            <details class="saas-more" <?php echo $open ? 'open' : ''; ?>>
+        <?php foreach ($saas_menu as $saas_section => $saas_items):
+            if ($saas_section === 'More'):
+                $saas_open = in_array($saas_cur, array_column($saas_items, 0), true); ?>
+            <details class="saas-more" <?php echo $saas_open ? 'open' : ''; ?>>
                 <summary class="saas-nav-section-label">More <i class="bi bi-chevron-down"></i></summary>
-                <?php foreach ($items as [$h, $i, $l]) { echo $saas_link($h, $i, $l); } ?>
+                <?php foreach ($saas_items as [$saas_h, $saas_i, $saas_l]) { echo $saas_link($saas_h, $saas_i, $saas_l); } ?>
             </details>
             <?php else: ?>
-            <div class="saas-nav-section-label"><?php echo ui_e($section); ?></div>
-            <?php foreach ($items as [$h, $i, $l]) { echo $saas_link($h, $i, $l); } ?>
+            <div class="saas-nav-section-label"><?php echo ui_e($saas_section); ?></div>
+            <?php foreach ($saas_items as [$saas_h, $saas_i, $saas_l]) { echo $saas_link($saas_h, $saas_i, $saas_l); } ?>
         <?php endif; endforeach; ?>
         <a href="../logout.php" class="text-danger fw-bold mt-2"><i class="bi bi-box-arrow-left"></i> Logout</a>
     </div>
@@ -122,8 +127,8 @@ $saas_role_label = ['admin' => 'Super Admin', 'manager' => 'Manager', 'hr' => 'H
 <?php if (!$saas_is_auditor):
     $saas_bottom = [['admin_dashboard.php', 'bi-house-door', 'Home'], ['admin_live_tracking.php', 'bi-geo-alt', 'Attendance'], ['admin_advance.php', 'bi-cash-stack', 'Upad'], ['admin_staff.php', 'bi-people', 'Staff'], ['admin_reports.php', 'bi-currency-rupee', 'Salary']]; ?>
 <nav class="ui-bottom-nav d-print-none" aria-label="Quick navigation">
-    <?php foreach ($saas_bottom as [$h, $i, $l]): ?>
-        <a href="<?php echo $h; ?>" class="<?php echo $saas_cur === $h ? 'on' : ''; ?>"><i class="bi <?php echo $i; ?>"></i><span><?php echo $l; ?></span></a>
+    <?php foreach ($saas_bottom as [$saas_h, $saas_i, $saas_l]): ?>
+        <a href="<?php echo $saas_h; ?>" class="<?php echo $saas_cur === $saas_h ? 'on' : ''; ?>"><i class="bi <?php echo $saas_i; ?>"></i><span><?php echo $saas_l; ?></span></a>
     <?php endforeach; ?>
     <a href="#" onclick="toggleSidebar();return false;"><i class="bi bi-grid"></i><span>More</span></a>
 </nav>
@@ -143,8 +148,8 @@ $saas_role_label = ['admin' => 'Super Admin', 'manager' => 'Manager', 'hr' => 'H
                 <div class="dropdown-menu dropdown-menu-end shadow p-0" style="min-width:300px">
                     <div class="px-3 py-2 fw-bold border-bottom">Notifications</div>
                     <?php if (!$saas_notes): ?><div class="px-3 py-3 text-muted small">You're all caught up 🎉</div><?php endif; ?>
-                    <?php foreach ($saas_notes as [$h, $i, $t]): ?>
-                        <a class="dropdown-item py-2 small" href="<?php echo ui_e($h); ?>"><i class="bi <?php echo ui_e($i); ?> me-2"></i><?php echo ui_e($t); ?></a>
+                    <?php foreach ($saas_notes as [$saas_h, $saas_i, $saas_t]): ?>
+                        <a class="dropdown-item py-2 small" href="<?php echo ui_e($saas_h); ?>"><i class="bi <?php echo ui_e($saas_i); ?> me-2"></i><?php echo ui_e($saas_t); ?></a>
                     <?php endforeach; ?>
                 </div>
             </div>

@@ -6,6 +6,27 @@ check_access(['admin', 'manager', 'hr']);
 $company_id = (int) get_company_id();
 $message = '';
 
+// Early punch-out approvals
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['early_action'])) {
+    if (!verify_csrf_token($_POST['csrf_token'] ?? '')) {
+        die('CSRF validation failed.');
+    }
+    $res = early_out_decide($conn, (int) ($_POST['request_id'] ?? 0), $company_id, $_POST['early_action'] === 'approve', (int) $_SESSION['user_id'], (string) ($_POST['admin_note'] ?? ''));
+    header('Location: admin_leaves.php?eo=' . ($res['ok'] ? 'ok' : 'err') . '&m=' . rawurlencode($res['msg']));
+    exit;
+}
+if (isset($_GET['eo'])) {
+    $message .= "<div class='alert alert-" . ($_GET['eo'] === 'ok' ? 'success' : 'warning') . " fw-semibold'>" . htmlspecialchars((string) ($_GET['m'] ?? '')) . '</div>';
+}
+$early_pending = [];
+$early_done = [];
+if (early_out_ready($conn)) {
+    $er = $conn->query("SELECT r.*, u.name, u.phone_number, a.punch_in FROM early_out_requests r JOIN users u ON u.id = r.user_id LEFT JOIN attendance_logs a ON a.id = r.attendance_id WHERE r.company_id = $company_id AND r.status = 'pending' ORDER BY r.id DESC");
+    $early_pending = $er ? $er->fetch_all(MYSQLI_ASSOC) : [];
+    $er = $conn->query("SELECT r.*, u.name FROM early_out_requests r JOIN users u ON u.id = r.user_id WHERE r.company_id = $company_id AND r.status <> 'pending' ORDER BY r.decided_at DESC LIMIT 15");
+    $early_done = $er ? $er->fetch_all(MYSQLI_ASSOC) : [];
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     if (!verify_csrf_token($_POST['csrf_token'] ?? '')) {
         die('CSRF validation failed.');
@@ -132,8 +153,55 @@ $csrf = generate_csrf_token();
     <div class="row g-0">
         <?php require_once __DIR__ . '/../includes/saas_sidebar_admin.php'; ?>
         <div class="col-md-10 main-content p-4">
-            <h3 class="fw-bold mb-3"><i class="bi bi-calendar2-check text-primary"></i> Leave Requests</h3>
+            <?php echo ui_hero('Approvals', 'Early punch-out requests and leave requests from staff.', 'bi-calendar2-check', 'clipboard'); ?>
             <?php echo $message; ?>
+
+            <div class="ui-panel mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h5 class="ui-panel-title"><i class="bi bi-box-arrow-right"></i> Early punch-out requests</h5>
+                    <span class="ui-pill <?php echo $early_pending ? 'solid-amber' : 'gray'; ?>"><?php echo count($early_pending); ?> pending</span>
+                </div>
+                <p class="small text-muted mb-2">Staff tried to punch out before their shift end time. Approve to record the punch-out at the requested time.</p>
+                <?php if (!$early_pending): ?>
+                    <div class="text-muted small py-2">No pending early punch-out requests. ✅</div>
+                <?php else: ?>
+                <div class="table-responsive"><table class="ui-table ui-cards-sm">
+                    <thead><tr><th>Staff</th><th>Date</th><th>In</th><th>Wants out at</th><th>Shift ends</th><th>Reason</th><th class="text-center">Decision</th></tr></thead>
+                    <tbody>
+                    <?php foreach ($early_pending as $r): ?>
+                        <tr>
+                            <td><div class="d-flex align-items-center gap-2"><?php echo ui_avatar((string) $r['name'], 'sm'); ?><b><?php echo ui_e($r['name']); ?></b></div></td>
+                            <td><?php echo date('d M Y', strtotime($r['log_date'])); ?></td>
+                            <td><span class="ui-pill green"><?php echo $r['punch_in'] ? date('h:i A', strtotime($r['punch_in'])) : '—'; ?></span></td>
+                            <td><span class="ui-pill amber"><?php echo date('h:i A', strtotime($r['requested_time'])); ?></span></td>
+                            <td><?php echo $r['shift_end_time'] ? date('h:i A', strtotime($r['shift_end_time'])) : '—'; ?></td>
+                            <td><?php echo ui_e($r['reason'] ?: '—'); ?></td>
+                            <td class="text-center">
+                                <form method="post" class="d-flex gap-1 justify-content-center flex-wrap">
+                                    <input type="hidden" name="csrf_token" value="<?php echo ui_e(generate_csrf_token()); ?>">
+                                    <input type="hidden" name="request_id" value="<?php echo (int) $r['id']; ?>">
+                                    <input type="text" name="admin_note" class="form-control form-control-sm" placeholder="Note (optional)" style="max-width:160px">
+                                    <button name="early_action" value="approve" class="btn btn-sm btn-success fw-bold"><i class="bi bi-check-lg"></i> Approve</button>
+                                    <button name="early_action" value="reject" class="btn btn-sm btn-outline-danger fw-bold"><i class="bi bi-x-lg"></i> Reject</button>
+                                </form>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table></div>
+                <?php endif; ?>
+                <?php if ($early_done): ?>
+                <details class="mt-2"><summary class="small fw-semibold">Recent decisions</summary>
+                    <div class="table-responsive mt-2"><table class="ui-table ui-cards-sm">
+                        <thead><tr><th>Staff</th><th>Date</th><th>Out at</th><th>Status</th><th>Note</th></tr></thead><tbody>
+                        <?php foreach ($early_done as $r): ?>
+                            <tr><td><?php echo ui_e($r['name']); ?></td><td><?php echo date('d M', strtotime($r['log_date'])); ?></td><td><?php echo date('h:i A', strtotime($r['requested_time'])); ?></td>
+                                <td><?php echo $r['status'] === 'approved' ? '<span class="ui-pill green">Approved</span>' : '<span class="ui-pill red">Rejected</span>'; ?></td><td><?php echo ui_e($r['admin_note'] ?: '—'); ?></td></tr>
+                        <?php endforeach; ?>
+                    </tbody></table></div>
+                </details>
+                <?php endif; ?>
+            </div>
             
             <div class="card p-4 border-0 shadow-sm">
                 <h5 class="fw-bold mb-3">Pending Requests</h5>

@@ -132,6 +132,8 @@ $csrf_token = generate_csrf_token();
                 <div class="d-flex flex-wrap align-items-center gap-3">
                     <div class="flex-grow-1">
                         <h5 class="ui-panel-title mb-2"><i class="bi bi-clock-history"></i> Today's Attendance <span class="ui-pill <?php echo $stateLabel[1]; ?> ms-1"><?php echo $stateLabel[0]; ?></span></h5>
+                        <div class="small text-muted mb-2"><i class="bi bi-clock"></i> Your shift: <b class="text-body"><?php echo ui_e(shift_label($P['user'])); ?></b></div>
+                        <?php if (($_GET['early'] ?? '') === 'sent'): ?><div class="alert alert-warning py-2 mb-2"><i class="bi bi-hourglass-split"></i> Your shift is not over yet — early punch-out request sent to admin. It will be recorded after approval.</div><?php endif; ?>
                         <div class="d-flex flex-wrap gap-2">
                             <span class="ui-pill <?php echo !empty($today_att['punch_in']) ? 'green' : 'gray'; ?>"><i class="bi bi-box-arrow-in-right"></i> In <?php echo $tf($today_att['punch_in'] ?? null) ?: '—'; ?></span>
                             <span class="ui-pill gray"><i class="bi bi-cup-hot"></i> Lunch <?php echo $tf($today_att['lunch_out'] ?? null) ?: '—'; ?> – <?php echo $tf($today_att['lunch_in'] ?? null) ?: '—'; ?></span>
@@ -141,20 +143,36 @@ $csrf_token = generate_csrf_token();
                     </div>
                     <div class="d-flex gap-2 flex-wrap">
                         <?php
+                        $endTs = early_out_ready($conn) ? shift_end_ts($P['user'], date('Y-m-d')) : null;
+                        $isEarly = $endTs !== null && time() < $endTs;
+                        $pendingEarly = early_out_pending($conn, $user_id, date('Y-m-d'));
+                        $outBtn = function () use ($isEarly, $pendingEarly, $endTs, $csrf_token): string {
+                            if ($pendingEarly) {
+                                return '<span class="ui-pill solid-amber"><i class="bi bi-hourglass-split"></i> Early out request sent (' . date('h:i A', strtotime($pendingEarly['requested_time'])) . ') — waiting for admin</span>';
+                            }
+                            if ($isEarly) {
+                                return '<form action="attendance_action.php" method="POST" class="d-flex gap-2 flex-wrap align-items-center punch-form early-form"><input type="hidden" name="csrf_token" value="' . ui_e($csrf_token) . '"><input type="hidden" name="action" value="punch_out">'
+                                    . '<input type="text" name="reason" class="form-control" style="max-width:220px" placeholder="Reason for leaving early" required maxlength="200">'
+                                    . '<button type="submit" class="btn btn-outline-danger btn-lg fw-bold px-3"><i class="bi bi-send"></i> Request early out</button>'
+                                    . '<div class="w-100 small text-muted">Shift ends at ' . date('h:i A', $endTs) . '. Before that, punch-out needs admin approval.</div></form>';
+                            }
+
+                            return '';
+                        };
                         $btn = static function (string $action, string $cls, string $icon, string $label) use ($csrf_token): string {
                             return '<form action="attendance_action.php" method="POST" class="d-inline punch-form"><input type="hidden" name="csrf_token" value="' . ui_e($csrf_token) . '"><input type="hidden" name="action" value="' . $action . '">'
                                 . '<button type="submit" class="btn ' . $cls . ' btn-lg fw-bold px-4 shadow-sm"><i class="bi ' . $icon . '"></i> ' . $label . '</button></form>';
                         };
-                        if ($isAuto && $todayState !== 'working' && $todayState !== 'lunch') {
-                            echo '<span class="ui-pill purple"><i class="bi bi-magic"></i> Automatic attendance</span>';
+                        if ($isAuto) {
+                            echo '<span class="ui-pill purple"><i class="bi bi-magic"></i> Automatic attendance — no punching needed</span>';
                         } elseif ($todayState === 'none') {
                             echo $btn('punch_in', 'btn-success', 'bi-box-arrow-in-right', 'Punch In');
                         } elseif ($todayState === 'working' && empty($today_att['lunch_out'])) {
-                            echo $btn('lunch_out', 'btn-warning', 'bi-cup-hot', 'Lunch Out') . $btn('punch_out', 'btn-danger', 'bi-box-arrow-left', 'Punch Out');
+                            echo $btn('lunch_out', 'btn-warning', 'bi-cup-hot', 'Lunch Out') . (($isEarly || $pendingEarly) ? $outBtn() : $btn('punch_out', 'btn-danger', 'bi-box-arrow-left', 'Punch Out'));
                         } elseif ($todayState === 'lunch') {
                             echo $btn('lunch_in', 'btn-info text-white', 'bi-arrow-return-right', 'Lunch In');
                         } elseif ($todayState === 'working') {
-                            echo $btn('punch_out', 'btn-danger', 'bi-box-arrow-left', 'Punch Out');
+                            echo ($isEarly || $pendingEarly) ? $outBtn() : $btn('punch_out', 'btn-danger', 'bi-box-arrow-left', 'Punch Out');
                         } else {
                             echo '<span class="ui-pill solid-green"><i class="bi bi-check-circle-fill"></i> Shift completed for today</span>';
                         }

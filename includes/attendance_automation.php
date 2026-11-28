@@ -350,25 +350,38 @@ function attendance_auto_present(mysqli $conn, ?int $companyId = null): int
             (string) ($u['auto_attendance_from'] ?: date('Y-m-d')),
             (string) ($u['join_date'] ?: '2000-01-01')
         );
-        $to = $now >= $shift ? date('Y-m-d') : date('Y-m-d', strtotime('-1 day'));
-        $out = date('H:i:s', strtotime($shift) + (int) round($hours * 3600));
-        $mins = (int) round($hours * 60);
+        $today = date('Y-m-d');
+        $to = $now >= $shift ? $today : date('Y-m-d', strtotime('-1 day'));
+        $endTime = !empty($u['shift_end_time']) ? substr((string) $u['shift_end_time'], 0, 8) : date('H:i:s', strtotime($shift) + (int) round($hours * 3600));
         $reason = '[Auto present]';
         for ($d = strtotime($from); $d <= strtotime($to); $d = strtotime('+1 day', $d)) {
             $ds = date('Y-m-d', $d);
             if (payroll_is_weekly_off($u, $ds)) {
                 continue;
             }
-            $chk = $conn->prepare('SELECT id FROM attendance_logs WHERE user_id = ? AND log_date = ? LIMIT 1');
+            $chk = $conn->prepare('SELECT * FROM attendance_logs WHERE user_id = ? AND log_date = ? LIMIT 1');
             $chk->bind_param('is', $uid, $ds);
             $chk->execute();
-            $exists = $chk->get_result()->num_rows > 0;
+            $existing = $chk->get_result()->fetch_assoc();
             $chk->close();
-            if ($exists) {
+            $endTs = shift_end_ts(array_merge($u, ['shift_end_time' => $endTime]), $ds) ?? strtotime("$ds $endTime");
+            $shiftOver = time() >= $endTs;
+            if ($existing) {
+                // close today's automatic day once the shift is over
+                if ($shiftOver && empty($existing['punch_out']) && str_contains((string) $existing['leave_reason'], '[Auto present]')) {
+                    $mins = attendance_minutes_with_out($existing, $endTime);
+                    $up = $conn->prepare('UPDATE attendance_logs SET punch_out = ?, total_worked_minutes = ? WHERE id = ?');
+                    $up->bind_param('sii', $endTime, $mins, $existing['id']);
+                    $up->execute();
+                    $up->close();
+                }
                 continue;
             }
             $cid = (int) $u['company_id'];
             $bid = (int) $u['branch_id'];
+            $row = ['punch_in' => $shift, 'lunch_out' => null, 'lunch_in' => null];
+            $out = $shiftOver ? $endTime : null;
+            $mins = $shiftOver ? attendance_minutes_with_out($row, $endTime) : 0;
             $ins = $conn->prepare('INSERT INTO attendance_logs (user_id, company_id, branch_id, log_date, punch_in, punch_out, total_worked_minutes, is_leave, leave_reason) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)');
             $ins->bind_param('iiisssis', $uid, $cid, $bid, $ds, $shift, $out, $mins, $reason);
             if ($ins->execute()) {

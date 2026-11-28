@@ -22,8 +22,8 @@ $saas_cur = basename($_SERVER['PHP_SELF'] ?? '');
 </div>
 <?php $saas_sname = (string) ($_SESSION['name'] ?? 'Staff'); ?>
 <nav class="ui-bottom-nav d-print-none" aria-label="Quick navigation">
-    <?php foreach ([['staff_dashboard.php', 'bi-house-door', 'Home'], ['staff_tasks.php', 'bi-list-check', 'Tasks'], ['staff_leave.php', 'bi-calendar-event', 'Leave'], ['staff_tasks_history.php', 'bi-clock-history', 'History']] as [$h, $i, $l]): ?>
-        <a href="<?php echo $h; ?>" class="<?php echo $saas_cur === $h ? 'on' : ''; ?>"><i class="bi <?php echo $i; ?>"></i><span><?php echo $l; ?></span></a>
+    <?php foreach ([['staff_dashboard.php', 'bi-house-door', 'Home'], ['staff_tasks.php', 'bi-list-check', 'Tasks'], ['staff_leave.php', 'bi-calendar-event', 'Leave'], ['staff_tasks_history.php', 'bi-clock-history', 'History']] as [$saas_h, $saas_i, $saas_l]): ?>
+        <a href="<?php echo $saas_h; ?>" class="<?php echo $saas_cur === $saas_h ? 'on' : ''; ?>"><i class="bi <?php echo $saas_i; ?>"></i><span><?php echo $saas_l; ?></span></a>
     <?php endforeach; ?>
     <a href="#" onclick="toggleSidebar();return false;"><i class="bi bi-grid"></i><span>More</span></a>
 </nav>
