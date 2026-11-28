@@ -114,6 +114,7 @@ $csrf_token = generate_csrf_token();
             body { padding: 20px; align-items: flex-start; padding-top: 50px; }
         }
     </style>
+    <?php echo app_pwa_head(); ?>
 </head>
 <body>
 

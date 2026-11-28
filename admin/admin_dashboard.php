@@ -120,6 +120,7 @@ $pct = static fn (int $n) => $total_staff > 0 ? round($n * 100 / $total_staff) :
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <link rel="stylesheet" href="../assets/saas_theme.css?v=<?php echo app_asset_version(); ?>">
+    <?php echo app_pwa_head(); ?>
     <style>
         .dash-legend li { display:flex; align-items:center; justify-content:space-between; padding:.42rem 0; font-weight:600; font-size:.92rem; }
         .dash-legend .dot { width:11px; height:11px; border-radius:50%; display:inline-block; margin-right:.6rem; }

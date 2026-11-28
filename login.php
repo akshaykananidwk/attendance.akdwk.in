@@ -152,6 +152,7 @@ $csrf_token = generate_csrf_token();
         .lg-alert { border-radius: 12px; padding: 10px 14px; font-weight: 600; font-size: .92rem; background: #fee2e2; color: #b91c1c; margin-bottom: 16px; display: flex; gap: 8px; align-items: flex-start; }
         @media (max-width: 480px) { body { padding: 0; align-items: stretch; } .lg-card { border-radius: 0; max-width: none; min-height: 100vh; box-shadow: none; } .lg-top { padding: 28px 22px 30px; } .lg-body { padding: 24px 22px; } }
     </style>
+    <?php echo app_pwa_head(); ?>
 </head>
 <body>
 <main class="lg-card">

@@ -221,3 +221,25 @@ function app_brand(): string
 
     return $n !== '' ? $n : 'Krishna Attendance';
 }
+
+/** <head> tags that make every page an installable PWA (manifest, icons, theme colour, service worker). */
+function app_pwa_head(): string
+{
+    $r = app_relative_root();
+    if ($r === '/') {
+        $r = '';
+    }
+    $n = htmlspecialchars(app_brand(), ENT_QUOTES, 'UTF-8');
+    $v = app_asset_version('assets/pwa.js');
+
+    return '<link rel="manifest" href="' . $r . 'manifest.php">'
+        . '<meta name="theme-color" content="#0b1d4a">'
+        . '<meta name="application-name" content="' . $n . '">'
+        . '<meta name="mobile-web-app-capable" content="yes">'
+        . '<meta name="apple-mobile-web-app-capable" content="yes">'
+        . '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">'
+        . '<meta name="apple-mobile-web-app-title" content="' . $n . '">'
+        . '<link rel="apple-touch-icon" href="' . $r . 'assets/icons/apple-touch-icon.png">'
+        . '<link rel="icon" type="image/png" sizes="32x32" href="' . $r . 'assets/icons/favicon-32.png">'
+        . '<script src="' . $r . 'assets/pwa.js?v=' . $v . '" defer></script>';
+}
